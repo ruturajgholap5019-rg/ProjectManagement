@@ -1,0 +1,353 @@
+// ============================================================================
+// Project Tracker & Digital Team Management Platform
+// Prisma Schema — SQLite Local Database Configuration
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================================================
+// TABLE: users
+// ============================================================================
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String    @map("password_hash")
+  rawPassword        String?   @map("raw_password")
+  firstName          String    @map("first_name")
+  lastName           String    @map("last_name")
+  role               String    // ADMIN, TEAM_MEMBER (Extensible for PROJECT_LEAD in future)
+  memberType         String?   @map("member_type") // STUDENT, EMPLOYEE
+  avatarUrl          String?   @map("avatar_url")
+  phone              String?
+  instagramUrl       String?   @map("instagram_url")
+  linkedinUrl        String?   @map("linkedin_url")
+  githubUrl          String?   @map("github_url")
+  youtubeUrl         String?   @map("youtube_url")
+  facebookUrl        String?   @map("facebook_url")
+  bio                String?
+  isActive           Boolean   @default(true) @map("is_active")
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
+  lastLoginAt        DateTime? @map("last_login_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  ledProjects        Project[]        @relation("ProjectLead")
+  previousProjects   Project[]        @relation("PreviousLead")
+  createdProjects    Project[]        @relation("ProjectCreator")
+  projectMemberships ProjectMember[]
+  assignedTasks      Task[]           @relation("TaskAssignee")
+  tasksAssignedBy    Task[]           @relation("TaskAssigner")
+  createdTasks       Task[]           @relation("TaskCreator")
+  workActivities     WorkActivity[]   @relation("MemberWork")
+  assignedWork       WorkActivity[]   @relation("AdminAssignedWork")
+  skills             MemberSkill[]
+  comments           Comment[]
+  uploadedFiles      Attachment[]
+  notifications      Notification[]
+  activityLogs       ActivityLog[]
+
+  @@index([role, isActive])
+  @@map("users")
+}
+
+// ============================================================================
+// TABLE: projects
+// ============================================================================
+
+model Project {
+  id                  String        @id @default(uuid())
+  name                String
+  description         String?
+  scope               String?       // Detailed project scope & deliverables
+  projectType         String        @map("project_type") // WEBSITE_WEBAPP, MOBILE_APP, BMS, etc.
+  leadId              String?       @map("lead_id") // Currently responsible lead/member
+  previousLeadId      String?       @map("previous_lead_id") // Previously responsible member
+  status              String        @default("ONGOING") // PLANNING, ONGOING, DELAYED, COMPLETED, HANDED_OVER, CANCELLED
+  statusReason        String?       @map("status_reason")
+  priority            String        @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  startDate           DateTime?     @map("start_date")
+  targetEndDate       DateTime?     @map("target_end_date")
+  actualEndDate       DateTime?     @map("actual_end_date")
+  handedOverAt        DateTime?     @map("handed_over_at")
+  maintenanceRequired Boolean       @default(false) @map("maintenance_required")
+  maintenanceNotes    String?       @map("maintenance_notes")
+  createdBy           String        @map("created_by")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  lead                User?           @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
+  previousLead        User?           @relation("PreviousLead", fields: [previousLeadId], references: [id], onDelete: SetNull)
+  creator             User            @relation("ProjectCreator", fields: [createdBy], references: [id])
+  members             ProjectMember[]
+  milestones          Milestone[]
+  tasks               Task[]
+  workActivities      WorkActivity[]
+  comments            Comment[]
+  attachments         Attachment[]
+  activityLogs        ActivityLog[]
+
+  @@index([leadId])
+  @@index([status])
+  @@index([createdBy])
+  @@map("projects")
+}
+
+// ============================================================================
+// TABLE: project_members
+// ============================================================================
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+// ============================================================================
+// TABLE: milestones
+// ============================================================================
+
+model Milestone {
+  id             String          @id @default(uuid())
+  projectId      String          @map("project_id")
+  name           String
+  description    String?
+  sortOrder      Int             @map("sort_order")
+  startDate      DateTime?       @map("start_date")
+  dueDate        DateTime?       @map("due_date")
+  status         String          @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+
+  @@index([projectId, sortOrder])
+  @@map("milestones")
+}
+
+// ============================================================================
+// TABLE: tasks
+// ============================================================================
+
+model Task {
+  id            String     @id @default(uuid())
+  projectId     String     @map("project_id")
+  milestoneId   String?    @map("milestone_id")
+  parentTaskId  String?    @map("parent_task_id")
+  title         String
+  description   String?
+  assigneeId    String?    @map("assignee_id")
+  assignedBy    String?    @map("assigned_by")
+  assignedAt    DateTime?  @map("assigned_at")
+  status        String     @default("TODO") // TODO, IN_PROGRESS, REVIEW, REVISION, COMPLETED
+  priority      String     @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  startDate     DateTime?  @map("start_date")
+  dueDate       DateTime?  @map("due_date")
+  completedAt   DateTime?  @map("completed_at")
+  isBlocked     Boolean    @default(false) @map("is_blocked")
+  blockedReason String?    @map("blocked_reason")
+  completionNotes String?  @map("completion_notes")
+  sortOrder     Int        @default(0) @map("sort_order")
+  createdById   String     @map("created_by")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  project       Project     @relation(fields: [projectId], references: [id])
+  milestone     Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  parentTask    Task?       @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks      Task[]      @relation("Subtasks")
+  assignee      User?       @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigner      User?       @relation("TaskAssigner", fields: [assignedBy], references: [id], onDelete: SetNull)
+  createdBy     User        @relation("TaskCreator", fields: [createdById], references: [id])
+  dependsOn     TaskDependency[] @relation("DependentTask")
+  dependedOnBy  TaskDependency[] @relation("PrerequisiteTask")
+  comments      Comment[]
+  attachments   Attachment[]
+  activityLogs  ActivityLog[]
+
+  @@index([projectId, status])
+  @@index([milestoneId])
+  @@index([parentTaskId])
+  @@index([assigneeId])
+  @@index([dueDate])
+  @@index([isBlocked])
+  @@map("tasks")
+}
+
+// ============================================================================
+// TABLE: work_activities (Internal Work Activity Log Table)
+// Attributes: Serial Number, Date & Time, Team Member, Project, Description, Hours Spent, Assigned By
+// ============================================================================
+
+model WorkActivity {
+  id              String   @id @default(uuid())
+  serialNo        Int      @default(0) @map("serial_no")
+  userId          String   @map("user_id")
+  projectId       String   @map("project_id")
+  workDescription String   @map("work_description")
+  hoursSpent      Float    @default(1.0) @map("hours_spent")
+  assignedById    String?  @map("assigned_by_id")
+  dateTime        DateTime @default(now()) @map("date_time")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user            User     @relation("MemberWork", fields: [userId], references: [id], onDelete: Cascade)
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedBy      User?    @relation("AdminAssignedWork", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, dateTime])
+  @@index([projectId, dateTime])
+  @@map("work_activities")
+}
+
+// ============================================================================
+// TABLE: member_skills (Skills, Capabilities & Potential Matrix)
+// ============================================================================
+
+model MemberSkill {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  skillName   String   @map("skill_name")
+  proficiency String   @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED, EXPERT
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillName])
+  @@index([userId])
+  @@map("member_skills")
+}
+
+// ============================================================================
+// TABLE: task_dependencies
+// ============================================================================
+
+model TaskDependency {
+  id          String @id @default(uuid())
+  taskId      String @map("task_id")
+  dependsOnId String @map("depends_on_id")
+
+  // Relations
+  task        Task @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn   Task @relation("PrerequisiteTask", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnId])
+  @@index([dependsOnId])
+  @@map("task_dependencies")
+}
+
+// ============================================================================
+// TABLE: comments
+// ============================================================================
+
+model Comment {
+  id        String   @id @default(uuid())
+  projectId String?  @map("project_id")
+  taskId    String?  @map("task_id")
+  userId    String   @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([projectId, createdAt])
+  @@index([taskId, createdAt])
+  @@map("comments")
+}
+
+// ============================================================================
+// TABLE: attachments
+// ============================================================================
+
+model Attachment {
+  id         String   @id @default(uuid())
+  projectId  String?  @map("project_id")
+  taskId     String?  @map("task_id")
+  uploadedBy String   @map("uploaded_by")
+  fileName   String   @map("file_name")
+  storedName String   @map("stored_name")
+  filePath   String   @map("file_path")
+  fileSize   Int      @map("file_size")
+  mimeType   String   @map("mime_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task       Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploader   User     @relation(fields: [uploadedBy], references: [id])
+
+  @@index([projectId])
+  @@index([taskId])
+  @@map("attachments")
+}
+
+// ============================================================================
+// TABLE: notifications
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+// ============================================================================
+// TABLE: activity_logs
+// ============================================================================
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  projectId String?  @map("project_id")
+  taskId    String?  @map("task_id")
+  userId    String   @map("user_id")
+  action    String
+  details   String?  // JSON string
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations — NO cascade
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([projectId, createdAt])
+  @@index([taskId, createdAt])
+  @@map("activity_logs")
+}

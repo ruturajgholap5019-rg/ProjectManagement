@@ -1,0 +1,409 @@
+// ============================================================================
+// Project Tracker & Digital Team Management Platform
+// Prisma Schema — Review Artifact (Module 1.2)
+//
+// This schema defines all 10 tables, 8 enums, relations, indexes, and
+// cascade behaviors. It must be reviewed and approved before any
+// application code is written.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  ADMIN
+  PROJECT_LEAD
+  TEAM_MEMBER
+}
+
+enum MemberType {
+  STUDENT
+  EMPLOYEE
+}
+
+enum ProjectType {
+  WEBSITE_WEBAPP
+  MOBILE_APP
+  BMS
+  UNIVERSITY_NEP
+  DESIGN_SOCIAL_MEDIA
+  PODCAST_MEDIA
+  RESEARCH
+  OTHER
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  AT_RISK
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  REVISION
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ProjectMemberRole {
+  LEAD
+  MEMBER
+}
+
+// ============================================================================
+// TABLE: users
+// 
+// All team members, project leads, and admins.
+// Students and Employees share the same TEAM_MEMBER role —
+// member_type is profile info only, no permission impact.
+// ============================================================================
+
+model User {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String    @unique @db.VarChar(255)
+  passwordHash       String    @map("password_hash") @db.VarChar(255)
+  firstName          String    @map("first_name") @db.VarChar(100)
+  lastName           String    @map("last_name") @db.VarChar(100)
+  role               UserRole
+  memberType         MemberType? @map("member_type")
+  avatarUrl          String?   @map("avatar_url") @db.VarChar(500)
+  phone              String?   @db.VarChar(20)
+  isActive           Boolean   @default(true) @map("is_active")
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
+  lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz()
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  ledProjects        Project[]       @relation("ProjectLead")
+  createdProjects    Project[]       @relation("ProjectCreator")
+  projectMemberships ProjectMember[]
+  assignedTasks      Task[]          @relation("TaskAssignee")
+  tasksAssignedBy    Task[]          @relation("TaskAssigner")
+  createdTasks       Task[]          @relation("TaskCreator")
+  comments           Comment[]
+  uploadedFiles      Attachment[]
+  notifications      Notification[]
+  activityLogs       ActivityLog[]
+
+  @@index([role, isActive])
+  @@map("users")
+}
+
+// ============================================================================
+// TABLE: projects
+//
+// All digital projects. Progress is derived from completedTasks/totalTasks,
+// never stored as a misleading percentage.
+// status_reason is REQUIRED when setting AT_RISK, ON_HOLD, or CANCELLED.
+// ============================================================================
+
+model Project {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String        @db.VarChar(255)
+  description     String?       @db.Text
+  projectType     ProjectType   @map("project_type")
+  leadId          String?       @map("lead_id") @db.Uuid
+  status          ProjectStatus @default(PLANNING)
+  statusReason    String?       @map("status_reason") @db.Text
+  priority        Priority      @default(MEDIUM)
+  startDate       DateTime?     @map("start_date") @db.Date
+  targetEndDate   DateTime?     @map("target_end_date") @db.Date
+  actualEndDate   DateTime?     @map("actual_end_date") @db.Date
+  totalTasks      Int           @default(0) @map("total_tasks") @db.SmallInt
+  completedTasks  Int           @default(0) @map("completed_tasks") @db.SmallInt
+  createdBy       String        @map("created_by") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  lead            User?           @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
+  creator         User            @relation("ProjectCreator", fields: [createdBy], references: [id])
+  members         ProjectMember[]
+  milestones      Milestone[]
+  tasks           Task[]
+  comments        Comment[]
+  attachments     Attachment[]
+  activityLogs    ActivityLog[]
+
+  @@index([leadId])
+  @@index([status])
+  @@index([createdBy])
+  @@map("projects")
+}
+
+// ============================================================================
+// TABLE: project_members
+//
+// Membership = visibility. If you're in this table, you can SEE
+// all project content (milestones, tasks, comments, files).
+// Task assignment (who DOES the work) is separate — on the tasks table.
+// ============================================================================
+
+model ProjectMember {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String            @map("project_id") @db.Uuid
+  userId    String            @map("user_id") @db.Uuid
+  role      ProjectMemberRole
+  joinedAt  DateTime          @default(now()) @map("joined_at") @db.Timestamptz()
+
+  // Relations
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+// ============================================================================
+// TABLE: milestones
+//
+// Major phases within a project. Created MANUALLY by the Project Lead.
+// No auto-seeding from workflow templates in v1.
+// Progress = completedTasks / totalTasks (denormalized counts).
+// ============================================================================
+
+model Milestone {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId      String          @map("project_id") @db.Uuid
+  name           String          @db.VarChar(255)
+  description    String?         @db.Text
+  sortOrder      Int             @map("sort_order") @db.SmallInt
+  startDate      DateTime?       @map("start_date") @db.Date
+  dueDate        DateTime?       @map("due_date") @db.Date
+  status         MilestoneStatus @default(PENDING)
+  totalTasks     Int             @default(0) @map("total_tasks") @db.SmallInt
+  completedTasks Int             @default(0) @map("completed_tasks") @db.SmallInt
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+
+  @@index([projectId, sortOrder])
+  @@map("milestones")
+}
+
+// ============================================================================
+// TABLE: tasks
+//
+// Individual work items. SINGLE ASSIGNEE — one person per task.
+// Use subtasks (parent_task_id) when multiple people work on something.
+// Status flow: TODO → IN_PROGRESS → REVIEW → COMPLETED
+//                                      ↓
+//                                   REVISION → IN_PROGRESS (cycle back)
+// ============================================================================
+
+model Task {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId     String     @map("project_id") @db.Uuid
+  milestoneId   String?    @map("milestone_id") @db.Uuid
+  parentTaskId  String?    @map("parent_task_id") @db.Uuid
+  title         String     @db.VarChar(255)
+  description   String?    @db.Text
+  assigneeId    String?    @map("assignee_id") @db.Uuid
+  assignedBy    String?    @map("assigned_by") @db.Uuid
+  assignedAt    DateTime?  @map("assigned_at") @db.Timestamptz()
+  status        TaskStatus @default(TODO)
+  priority      Priority   @default(MEDIUM)
+  startDate     DateTime?  @map("start_date") @db.Date
+  dueDate       DateTime?  @map("due_date") @db.Date
+  completedAt   DateTime?  @map("completed_at") @db.Timestamptz()
+  isBlocked     Boolean    @default(false) @map("is_blocked")
+  blockedReason String?    @map("blocked_reason") @db.Text
+  sortOrder     Int        @default(0) @map("sort_order") @db.SmallInt
+  createdById   String     @map("created_by") @db.Uuid
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  project       Project     @relation(fields: [projectId], references: [id])
+  milestone     Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  parentTask    Task?       @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks      Task[]      @relation("Subtasks")
+  assignee      User?       @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigner      User?       @relation("TaskAssigner", fields: [assignedBy], references: [id], onDelete: SetNull)
+  createdBy     User        @relation("TaskCreator", fields: [createdById], references: [id])
+  dependsOn     TaskDependency[] @relation("DependentTask")
+  dependedOnBy  TaskDependency[] @relation("PrerequisiteTask")
+  comments      Comment[]
+  attachments   Attachment[]
+  activityLogs  ActivityLog[]
+
+  @@index([projectId, status])
+  @@index([milestoneId])
+  @@index([parentTaskId])
+  @@index([assigneeId])
+  @@index([dueDate])
+  @@index([isBlocked])
+  @@map("tasks")
+}
+
+// ============================================================================
+// TABLE: task_dependencies
+//
+// Simple predecessor model. task depends_on another task.
+// Circular dependencies are prevented by DFS in the service layer,
+// NOT by the database (DB can't easily detect graph cycles).
+// Soft blocking: warns if predecessor isn't COMPLETED, doesn't hard-block.
+// ============================================================================
+
+model TaskDependency {
+  id          String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId      String @map("task_id") @db.Uuid
+  dependsOnId String @map("depends_on_id") @db.Uuid
+
+  // Relations
+  task        Task @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn   Task @relation("PrerequisiteTask", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnId])
+  @@map("task_dependencies")
+}
+
+// NOTE: The CHECK constraint (taskId != dependsOnId) must be added via a
+// raw SQL migration since Prisma doesn't support CHECK constraints natively.
+// Migration SQL: ALTER TABLE task_dependencies ADD CONSTRAINT no_self_dep CHECK (task_id != depends_on_id);
+
+// ============================================================================
+// TABLE: comments
+//
+// Discussion on projects and tasks. A comment belongs to EITHER
+// a project OR a task (never both, never neither).
+// Any project member can comment.
+// ============================================================================
+
+model Comment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String?  @map("project_id") @db.Uuid
+  taskId    String?  @map("task_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([taskId, createdAt(sort: Desc)])
+  @@map("comments")
+}
+
+// NOTE: The CHECK constraint (projectId IS NOT NULL OR taskId IS NOT NULL)
+// must be added via raw SQL migration. Prisma doesn't support CHECK constraints.
+// Migration SQL: ALTER TABLE comments ADD CONSTRAINT comment_parent_check CHECK (project_id IS NOT NULL OR task_id IS NOT NULL);
+
+// ============================================================================
+// TABLE: attachments
+//
+// Files attached to projects or tasks.
+// SECURITY: MIME validated against conservative whitelist + magic bytes.
+// Stored as UUID-named files outside webroot. No archives in v1.
+// ============================================================================
+
+model Attachment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId  String?  @map("project_id") @db.Uuid
+  taskId     String?  @map("task_id") @db.Uuid
+  uploadedBy String   @map("uploaded_by") @db.Uuid
+  fileName   String   @map("file_name") @db.VarChar(255)
+  storedName String   @map("stored_name") @db.VarChar(255)
+  filePath   String   @map("file_path") @db.VarChar(500)
+  fileSize   Int      @map("file_size")
+  mimeType   String   @map("mime_type") @db.VarChar(100)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task       Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploader   User     @relation(fields: [uploadedBy], references: [id])
+
+  @@index([projectId])
+  @@index([taskId])
+  @@map("attachments")
+}
+
+// ============================================================================
+// TABLE: notifications
+//
+// In-app notifications. Types:
+// TASK_ASSIGNED, TASK_STATUS_CHANGED, TASK_REVISION_REQUESTED,
+// TASK_COMPLETED, TASK_BLOCKED, DEADLINE_APPROACHING, DEADLINE_OVERDUE,
+// COMMENT_ADDED, PROJECT_STATUS_CHANGED, MEMBER_ADDED
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  type      String   @db.VarChar(50)
+  title     String   @db.VarChar(255)
+  message   String   @db.Text
+  link      String?  @db.VarChar(500)
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ============================================================================
+// TABLE: activity_logs
+//
+// Immutable audit trail. No updated_at — logs are never modified.
+// details stores structured change data as JSONB:
+//   { "field": "status", "old": "TODO", "new": "IN_PROGRESS" }
+// ============================================================================
+
+model ActivityLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String?  @map("project_id") @db.Uuid
+  taskId    String?  @map("task_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  action    String   @db.VarChar(100)
+  details   Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations — NO onDelete Cascade for logs. Logs survive parent deletion.
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([taskId, createdAt(sort: Desc)])
+  @@map("activity_logs")
+}

@@ -1,0 +1,1089 @@
+import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../services/api';
+import { useAuthStore } from '../store/authStore';
+import { Button } from '../components/UI/Button';
+import { Select, TextArea, Input } from '../components/UI/Input';
+import { Modal } from '../components/UI/Modal';
+import { ConfirmModal } from '../components/UI/ConfirmModal';
+import { Badge } from '../components/UI/Badge';
+import { generateProjectPdfReport } from '../utils/pdfReportGenerator';
+import { ArrowLeft, CheckCircle2, UserPlus, UserX, AlertTriangle, Plus, MessageSquare, Paperclip, Download, Sparkles, FileText } from 'lucide-react';
+
+interface ProjectDetailProps {
+  projectId: string;
+  onBack: () => void;
+}
+
+export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onBack }) => {
+  const user = useAuthStore((state) => state.user);
+
+  const [project, setProject] = useState<any>(null);
+  const [members, setMembers] = useState<any[]>([]);
+  const [milestones, setMilestones] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [comments, setComments] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'members' | 'comments' | 'files'>('overview');
+
+  // Edit Project Settings Modal
+  const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editProjectType, setEditProjectType] = useState('');
+  const [editPriority, setEditPriority] = useState('');
+  const [editScope, setEditScope] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [isSavingProject, setIsSavingProject] = useState(false);
+
+  const openEditModal = () => {
+    if (!project) return;
+    setEditName(project.name || '');
+    setEditProjectType(project.projectType || 'WEBSITE_WEBAPP');
+    setEditPriority(project.priority || 'MEDIUM');
+    setEditScope(project.scope || '');
+    setEditDescription(project.description || '');
+    setIsEditProjectOpen(true);
+  };
+
+  const handleUpdateProjectDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProject(true);
+    try {
+      await apiFetch(`/projects/${projectId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: editName,
+          projectType: editProjectType,
+          priority: editPriority,
+          scope: editScope,
+          description: editDescription,
+        }),
+      });
+
+      setIsEditProjectOpen(false);
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update project details');
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
+
+  // Status Change Modal
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState<string>('ACTIVE');
+  const [statusReason, setStatusReason] = useState<string>('');
+
+  // Add Member Modal
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  // Create Milestone Modal
+  const [isMilestoneOpen, setIsMilestoneOpen] = useState(false);
+  const [milestoneName, setMilestoneName] = useState('');
+  const [milestoneDesc, setMilestoneDesc] = useState('');
+
+  // Create Task Modal
+  const [isTaskOpen, setIsTaskOpen] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDesc, setTaskDesc] = useState('');
+  const [taskAssignee, setTaskAssignee] = useState('');
+  const [taskMilestone, setTaskMilestone] = useState('');
+  const [taskPriority, setTaskPriority] = useState('MEDIUM');
+
+  // New Comment
+  const [newComment, setNewComment] = useState('');
+
+  // Upload File
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // PDF Report Modal State
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfTimeRange, setPdfTimeRange] = useState('ALL');
+  const [pdfStartDate, setPdfStartDate] = useState('');
+  const [pdfEndDate, setPdfEndDate] = useState('');
+  const [pdfStatusFilter, setPdfStatusFilter] = useState('ALL');
+  const [pdfSections, setPdfSections] = useState({
+    summary: true,
+    members: true,
+    tasks: true,
+    comments: true,
+    attachments: true,
+  });
+
+  const handleGeneratePdf = (e: React.FormEvent) => {
+    e.preventDefault();
+    generateProjectPdfReport({
+      project,
+      members,
+      milestones,
+      tasks,
+      comments,
+      attachments,
+      timeRange: pdfTimeRange,
+      startDate: pdfStartDate,
+      endDate: pdfEndDate,
+      statusFilter: pdfStatusFilter,
+      includeSections: pdfSections,
+    });
+    setIsPdfModalOpen(false);
+  };
+
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
+  const [removeMemberUserId, setRemoveMemberUserId] = useState<string | null>(null);
+
+  const fetchProjectDetails = async () => {
+    setIsLoading(true);
+    try {
+      const [projData, membersData, msData, taskData, commentData, attachData] = await Promise.all([
+        apiFetch<any>(`/projects/${projectId}`),
+        apiFetch<any[]>(`/projects/${projectId}/members`),
+        apiFetch<any[]>(`/projects/${projectId}/milestones`),
+        apiFetch<any[]>(`/projects/${projectId}/tasks`),
+        apiFetch<any[]>(`/comments?projectId=${projectId}`),
+        apiFetch<any[]>(`/attachments?projectId=${projectId}`),
+      ]);
+
+      setProject(projData);
+      setNewStatus(projData.status);
+      setMembers(membersData);
+      setMilestones(msData);
+      setTasks(taskData);
+      setComments(commentData);
+      setAttachments(attachData);
+    } catch (err: any) {
+      alert(err.message || 'Failed to load project details');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProjectDetails();
+  }, [projectId]);
+
+  const handleStatusUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (['AT_RISK', 'ON_HOLD', 'CANCELLED'].includes(newStatus) && !statusReason.trim()) {
+      alert(`Reason for status change is required when setting status to ${newStatus.replace('_', ' ')}.`);
+      return;
+    }
+
+    try {
+      await apiFetch(`/projects/${projectId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus, statusReason: statusReason.trim() || undefined }),
+      });
+
+      setIsStatusOpen(false);
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update status');
+    }
+  };
+
+  const handleTaskStatusChange = async (taskId: string, newStatus: string) => {
+    try {
+      await apiFetch(`/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update task status');
+    }
+  };
+
+  const handleOpenAddMember = async () => {
+    try {
+      const users = await apiFetch<any[]>('/users');
+      setAllUsers(users);
+      setIsAddMemberOpen(true);
+    } catch {
+      alert('Failed to load user list');
+    }
+  };
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserId) return;
+
+    try {
+      await apiFetch(`/projects/${projectId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ userId: selectedUserId }),
+      });
+
+      setIsAddMemberOpen(false);
+      setSelectedUserId('');
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add member');
+    }
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!removeMemberUserId) return;
+    try {
+      await apiFetch(`/projects/${projectId}/members/${removeMemberUserId}`, {
+        method: 'DELETE',
+      });
+      setRemoveMemberUserId(null);
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove member');
+    }
+  };
+
+  const handleConfirmDeleteProject = async () => {
+    setIsDeletingProject(true);
+    try {
+      await apiFetch(`/projects/${projectId}`, { method: 'DELETE' });
+      setIsDeleteConfirmOpen(false);
+      onBack();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete project');
+    } finally {
+      setIsDeletingProject(false);
+    }
+  };
+
+  const handleCreateMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiFetch(`/projects/${projectId}/milestones`, {
+        method: 'POST',
+        body: JSON.stringify({ name: milestoneName, description: milestoneDesc }),
+      });
+      setIsMilestoneOpen(false);
+      setMilestoneName('');
+      setMilestoneDesc('');
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to create milestone');
+    }
+  };
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiFetch(`/projects/${projectId}/tasks`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: taskTitle,
+          description: taskDesc,
+          assigneeId: taskAssignee || undefined,
+          milestoneId: taskMilestone || undefined,
+          priority: taskPriority,
+        }),
+      });
+      setIsTaskOpen(false);
+      setTaskTitle('');
+      setTaskDesc('');
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to create task');
+    }
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
+    try {
+      await apiFetch('/comments', {
+        method: 'POST',
+        body: JSON.stringify({ projectId, content: newComment }),
+      });
+      setNewComment('');
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to post comment');
+    }
+  };
+
+  const handleFileUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('projectId', projectId);
+
+      const token = useAuthStore.getState().accessToken;
+      const res = await fetch('/api/v1/attachments', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Upload failed');
+      }
+
+      setSelectedFile(null);
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'File upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (isLoading || !project) {
+    return (
+      <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
+        <Sparkles className="animate-pulse-glow" size={24} color="var(--primary)" style={{ marginBottom: '10px' }} />
+        <p style={{ fontWeight: 600 }}>Loading project workbench...</p>
+      </div>
+    );
+  }
+
+  const isLeadOrAdmin = user?.role === 'ADMIN' || project.leadId === user?.id;
+  const completedCount = tasks.filter((t) => t.status === 'COMPLETED').length;
+  const inProgressCount = tasks.filter((t) => ['IN_PROGRESS', 'REVIEW', 'REVISION'].includes(t.status)).length;
+  const todoCount = tasks.filter((t) => t.status === 'TODO').length;
+  const totalCount = tasks.length || project.totalTasks || 0;
+  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  return (
+    <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '1280px', margin: '0 auto' }}>
+      {/* Back Button */}
+      <button
+        onClick={onBack}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'var(--text-secondary)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '0.9rem',
+          fontWeight: 700,
+          marginBottom: '22px',
+          transition: 'color 0.15s ease',
+        }}
+      >
+        <ArrowLeft size={18} />
+        Back to Projects List
+      </button>
+
+      {/* Main Header Banner */}
+      <div className="glass-card" style={{ padding: '32px', marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
+              <Badge
+                variant="gradient"
+                style={{ cursor: user?.role === 'ADMIN' ? 'pointer' : 'default' }}
+                title={user?.role === 'ADMIN' ? 'Click to edit category / project type' : undefined}
+                onClick={() => user?.role === 'ADMIN' && openEditModal()}
+              >
+                {project.projectType.replace(/_/g, ' ')}
+                {user?.role === 'ADMIN' && <span style={{ marginLeft: '4px', opacity: 0.8 }}>✏️</span>}
+              </Badge>
+              <Badge
+                variant={project.priority === 'CRITICAL' ? 'danger' : project.priority === 'HIGH' ? 'warning' : 'info'}
+                style={{ cursor: user?.role === 'ADMIN' ? 'pointer' : 'default' }}
+                title={user?.role === 'ADMIN' ? 'Click to edit project priority' : undefined}
+                onClick={() => user?.role === 'ADMIN' && openEditModal()}
+              >
+                Priority: {project.priority}
+                {user?.role === 'ADMIN' && <span style={{ marginLeft: '4px', opacity: 0.8 }}>✏️</span>}
+              </Badge>
+              <Badge variant={project.status === 'AT_RISK' ? 'danger' : project.status === 'ONGOING' || project.status === 'ACTIVE' ? 'success' : 'neutral'} pulse>
+                {project.status.replace(/_/g, ' ')}
+              </Badge>
+            </div>
+            <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
+              {project.name}
+            </h1>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <Button variant="gradient" onClick={() => setIsPdfModalOpen(true)}>
+              <FileText size={16} /> Download PDF Report
+            </Button>
+            {user?.role === 'ADMIN' && (
+              <Button variant="secondary" onClick={openEditModal}>
+                Edit Details & Priority
+              </Button>
+            )}
+            {isLeadOrAdmin && (
+              <Button variant="secondary" onClick={() => setIsStatusOpen(true)}>
+                Change Status
+              </Button>
+            )}
+            {user?.role === 'ADMIN' && (
+              <Button variant="danger" onClick={() => setIsDeleteConfirmOpen(true)}>
+                Delete Project
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {project.statusReason && (
+          <div
+            style={{
+              marginTop: '20px',
+              padding: '14px 18px',
+              backgroundColor: 'var(--warning-light)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--warning)',
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+            }}
+          >
+            <AlertTriangle size={18} />
+            <span>
+              <strong>Status Reason:</strong> {project.statusReason}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation Tabs Glass Bar */}
+      <div className="glass-card" style={{ display: 'flex', gap: '8px', padding: '8px 12px', marginBottom: '28px', flexWrap: 'wrap' }}>
+        {[
+          { id: 'overview', label: 'Overview' },
+          { id: 'tasks', label: `Milestones & Tasks (${tasks.length})` },
+          { id: 'members', label: `Team Members (${members.length})` },
+          { id: 'comments', label: `Comments (${comments.length})` },
+          { id: 'files', label: `Files (${attachments.length})` },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            style={{
+              padding: '10px 20px',
+              borderRadius: 'var(--radius-md)',
+              border: 'none',
+              backgroundColor: activeTab === tab.id ? 'var(--primary-light)' : 'transparent',
+              color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-secondary)',
+              fontWeight: activeTab === tab.id ? 700 : 600,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: activeTab === tab.id ? 'var(--shadow-sm)' : 'none',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Overview Tab */}
+      {activeTab === 'overview' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '28px' }}>
+          <div className="glass-card" style={{ padding: '28px' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '14px' }}>Project Scope & Deliverables</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.96rem', lineHeight: '1.6' }}>
+              {project.scope || project.description || 'No detailed scope provided.'}
+            </p>
+
+            {project.description && project.scope && (
+              <>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '24px', marginBottom: '10px' }}>Background Description</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: '1.6' }}>{project.description}</p>
+              </>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div className="glass-card" style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle2 color="var(--primary)" size={18} />
+                  Project Progress
+                </h3>
+                <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)', fontFamily: 'var(--font-display)' }}>
+                  {progressPercent}%
+                </span>
+              </div>
+
+              {/* Multi-stage Progress Bar */}
+              <div style={{ width: '100%', height: '10px', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-full)', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: '16px', display: 'flex' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${progressPercent}%`,
+                    background: 'linear-gradient(90deg, #10b981, #6366f1)',
+                    borderRadius: 'var(--radius-full)',
+                    transition: 'width 0.4s ease',
+                  }}
+                  title={`Completed: ${completedCount} / ${totalCount} tasks (${progressPercent}%)`}
+                />
+              </div>
+
+              {/* Breakdown metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', fontSize: '0.78rem', textAlign: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                <div>
+                  <div style={{ fontWeight: 800, color: '#10b981', fontSize: '1rem' }}>{completedCount}</div>
+                  <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Completed</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1rem' }}>{inProgressCount}</div>
+                  <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>In Progress</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, color: 'var(--text-secondary)', fontSize: '1rem' }}>{todoCount}</div>
+                  <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Pending</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '24px' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '16px' }}>Project Lead</h3>
+              {project.lead ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent-purple) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, boxShadow: 'var(--shadow-glow)' }}>
+                    {project.lead.firstName[0]}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{project.lead.firstName} {project.lead.lastName}</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{project.lead.email}</div>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No Lead assigned yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Milestones & Tasks Tab */}
+      {activeTab === 'tasks' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>Project Deliverables & Milestones</h3>
+            {isLeadOrAdmin && (
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Button size="sm" variant="secondary" onClick={() => setIsMilestoneOpen(true)}>
+                  <Plus size={16} /> Create Milestone
+                </Button>
+                <Button size="sm" variant="gradient" onClick={() => setIsTaskOpen(true)}>
+                  <Plus size={16} /> Create Task
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Milestone Cards Grid */}
+          {milestones.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+              {milestones.map((ms) => (
+                <div key={ms.id} className="glass-card hover-lift" style={{ padding: '20px' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1rem' }}>{ms.name}</div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    {ms.completedTasks} of {ms.totalTasks} tasks completed
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Task List */}
+          <div className="glass-card" style={{ padding: '28px' }}>
+            {tasks.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>
+                No tasks created for this project yet.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {tasks.map((t: any) => {
+                  const isCompleted = t.status === 'COMPLETED';
+                  const dueDateText = t.dueDate ? new Date(t.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+                  const isOverdue = t.dueDate && new Date(t.dueDate) < new Date() && !isCompleted;
+
+                  return (
+                    <div key={t.id} style={{ backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+                      <div style={{ flex: 1, paddingRight: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                          {t.milestone && <Badge variant="info">{t.milestone.name}</Badge>}
+                          <Badge variant={t.priority === 'CRITICAL' ? 'danger' : t.priority === 'HIGH' ? 'warning' : 'neutral'}>{t.priority}</Badge>
+                          {t.assignee && <Badge variant="gradient">👤 {t.assignee.firstName} {t.assignee.lastName}</Badge>}
+                          {dueDateText && (
+                            <span
+                              style={{
+                                fontSize: '0.76rem',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: 'var(--radius-full)',
+                                backgroundColor: isOverdue ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-card)',
+                                color: isOverdue ? 'var(--danger)' : 'var(--text-secondary)',
+                                border: isOverdue ? '1px solid var(--danger)' : '1px solid var(--border-color)',
+                              }}
+                            >
+                              📅 {isOverdue ? `Overdue (${dueDateText})` : `Deadline: ${dueDateText}`}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1.02rem' }}>{t.title}</div>
+                        {t.description && <div style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{t.description}</div>}
+                        {t.completionNotes && (
+                          <div style={{ marginTop: '10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', borderLeft: '3px solid var(--success)', fontSize: '0.84rem' }}>
+                            <strong style={{ color: 'var(--success)' }}>✅ Completion Summary:</strong> <span style={{ color: 'var(--text-secondary)' }}>{t.completionNotes}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Interactive Task Status Selector Dropdown */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <select
+                          value={t.status}
+                          onChange={(e) => handleTaskStatusChange(t.id, e.target.value)}
+                          style={{
+                            backgroundColor: isCompleted ? 'var(--success-light)' : 'var(--bg-card)',
+                            border: isCompleted ? '1px solid var(--success)' : '1px solid var(--border-color)',
+                            color: isCompleted ? 'var(--success)' : 'var(--text-primary)',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            padding: '6px 10px',
+                            borderRadius: 'var(--radius-md)',
+                            outline: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <option value="TODO">To Do</option>
+                          <option value="IN_PROGRESS">In Progress</option>
+                          <option value="REVISION">Revision Required</option>
+                          <option value="REVIEW">Under Review</option>
+                          <option value="COMPLETED">Completed</option>
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Team Members Tab */}
+      {activeTab === 'members' && (
+        <div className="glass-card" style={{ padding: '28px' }}>
+          {project.status === 'CANCELLED' && (
+            <div style={{ padding: '12px 16px', backgroundColor: 'var(--danger-light)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: '0.88rem', fontWeight: 600, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle size={18} />
+              <span>This project is cancelled. Team member assignment is disabled.</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>Assigned Team Members</h3>
+            {user?.role === 'ADMIN' && (
+              <Button size="sm" variant="gradient" onClick={handleOpenAddMember} disabled={project.status === 'CANCELLED'}>
+                <UserPlus size={16} /> Add Member
+              </Button>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+            {members.map((m) => {
+              const u = m.user || m;
+              const firstName = u.firstName || 'User';
+              const lastName = u.lastName || '';
+              const email = u.email || '';
+              const initials = `${firstName[0] || 'U'}${lastName[0] || ''}`;
+
+              return (
+                <div key={m.id || m.userId} className="glass-panel hover-lift" style={{ padding: '18px', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent-purple) 100%)', color: '#fff', fontWeight: 800, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {initials}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{firstName} {lastName}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{email}</div>
+                    </div>
+                  </div>
+                  {user?.role === 'ADMIN' && m.userId !== project.leadId && (
+                    <Button size="sm" variant="ghost" onClick={() => setRemoveMemberUserId(m.userId)} title="Remove Member">
+                      <UserX size={16} color="var(--danger)" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Comments Tab */}
+      {activeTab === 'comments' && (
+        <div className="glass-card" style={{ padding: '28px' }}>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <MessageSquare size={20} color="var(--primary)" /> Project Discussion
+          </h3>
+
+          <form onSubmit={handleAddComment} style={{ display: 'flex', gap: '12px', marginBottom: '28px' }}>
+            <div style={{ flex: 1 }}>
+              <TextArea
+                placeholder="Share project updates, technical notes, or client feedback..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                required
+              />
+            </div>
+            <Button variant="gradient" type="submit" style={{ height: '46px', alignSelf: 'flex-end' }}>
+              Post Comment
+            </Button>
+          </form>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {comments.map((c) => (
+              <div key={c.id} style={{ backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '18px', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>{c.user?.firstName} {c.user?.lastName}</strong>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{new Date(c.createdAt).toLocaleString()}</span>
+                </div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>{c.content}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Files Tab */}
+      {activeTab === 'files' && (
+        <div className="glass-card" style={{ padding: '28px' }}>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Paperclip size={20} color="var(--primary)" /> Project Attachments & Assets
+          </h3>
+
+          <form onSubmit={handleFileUpload} style={{ display: 'flex', gap: '12px', marginBottom: '28px', alignItems: 'center' }}>
+            <input
+              type="file"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              style={{ flex: 1, backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '10px 14px', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }}
+            />
+            <Button variant="gradient" type="submit" isLoading={isUploading} disabled={!selectedFile}>
+              Upload Attachment
+            </Button>
+          </form>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {attachments.map((a) => (
+              <div key={a.id} style={{ backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '16px', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.96rem' }}>{a.fileName}</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    {(a.fileSize / 1024 / 1024).toFixed(2)} MB • Uploaded by {a.uploader?.firstName} {a.uploader?.lastName}
+                  </div>
+                </div>
+                <a
+                  href={`/api/v1/attachments/${a.id}/download`}
+                  download
+                  style={{ textDecoration: 'none' }}
+                >
+                  <Button size="sm" variant="secondary">
+                    <Download size={14} /> Download File
+                  </Button>
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Change Status Modal */}
+      <Modal isOpen={isStatusOpen} onClose={() => setIsStatusOpen(false)} title="Update Project Status">
+        <form onSubmit={handleStatusUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Select
+            label="Project Status"
+            value={newStatus}
+            onChange={(e) => setNewStatus(e.target.value)}
+            options={[
+              { value: 'PLANNING', label: 'Planning' },
+              { value: 'ONGOING', label: 'Ongoing' },
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'AT_RISK', label: 'At Risk' },
+              { value: 'ON_HOLD', label: 'On Hold' },
+              { value: 'COMPLETED', label: 'Completed' },
+              { value: 'CANCELLED', label: 'Cancelled' },
+            ]}
+          />
+
+          <TextArea
+            label={`Reason for Status Change ${['AT_RISK', 'ON_HOLD', 'CANCELLED'].includes(newStatus) ? '(Required for At Risk / On Hold / Cancelled)' : '(Optional)'}`}
+            value={statusReason}
+            onChange={(e) => setStatusReason(e.target.value)}
+            required={['AT_RISK', 'ON_HOLD', 'CANCELLED'].includes(newStatus)}
+            placeholder={['AT_RISK', 'ON_HOLD', 'CANCELLED'].includes(newStatus) ? 'Please explain why the project status is being changed...' : 'Optional notes...'}
+          />
+
+          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
+            Update Project Status
+          </Button>
+        </form>
+      </Modal>
+
+      {/* Add Member Modal */}
+      <Modal isOpen={isAddMemberOpen} onClose={() => setIsAddMemberOpen(false)} title="Add Team Member to Project">
+        <form onSubmit={handleAddMember} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Select
+            label="Select User"
+            value={selectedUserId}
+            onChange={(e) => setSelectedUserId(e.target.value)}
+            options={[
+              { value: '', label: 'Select Student or Lead...' },
+              ...allUsers.map((u) => ({
+                value: u.id,
+                label: `${u.firstName} ${u.lastName} (${u.email})`,
+              })),
+            ]}
+          />
+          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
+            Add Member
+          </Button>
+        </form>
+      </Modal>
+
+      {/* Delete Confirm Modal */}
+      <ConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleConfirmDeleteProject}
+        title="Cancel & Archive Project"
+        message="Are you sure you want to cancel this project? Status will be set to CANCELLED and all historical deliverables will be preserved."
+        confirmText="Cancel Project"
+        variant="danger"
+        isLoading={isDeletingProject}
+      />
+
+      {/* Remove Member Confirm Modal */}
+      <ConfirmModal
+        isOpen={Boolean(removeMemberUserId)}
+        onClose={() => setRemoveMemberUserId(null)}
+        onConfirm={handleConfirmRemoveMember}
+        title="Remove Member from Project"
+        message="Are you sure you want to remove this team member from the project?"
+        confirmText="Remove Member"
+        variant="danger"
+      />
+
+      {/* Create Milestone Modal */}
+      <Modal isOpen={isMilestoneOpen} onClose={() => setIsMilestoneOpen(false)} title="Create Project Milestone">
+        <form onSubmit={handleCreateMilestone} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Input label="Milestone Name" value={milestoneName} onChange={(e) => setMilestoneName(e.target.value)} placeholder="e.g. Phase 1 — Database & Authentication" required />
+          <TextArea label="Description" value={milestoneDesc} onChange={(e) => setMilestoneDesc(e.target.value)} placeholder="Key scope objectives of this milestone..." />
+          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
+            Create Milestone
+          </Button>
+        </form>
+      </Modal>
+
+      {/* Create Task Modal */}
+      <Modal isOpen={isTaskOpen} onClose={() => setIsTaskOpen(false)} title="Create Project Task">
+        <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Input label="Task Title" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="e.g. Implement User Role Auth Middleware" required />
+          <TextArea label="Task Description" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} placeholder="Technical requirements, acceptance criteria..." />
+          <Select
+            label="Assignee"
+            value={taskAssignee}
+            onChange={(e) => setTaskAssignee(e.target.value)}
+            options={[
+              { value: '', label: 'Unassigned' },
+              ...members.map((m) => {
+                const u = m.user || m;
+                const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Member';
+                return {
+                  value: m.userId || m.id,
+                  label: name,
+                };
+              }),
+            ]}
+          />
+          <Select
+            label="Milestone (Optional)"
+            value={taskMilestone}
+            onChange={(e) => setTaskMilestone(e.target.value)}
+            options={[
+              { value: '', label: 'No Milestone' },
+              ...milestones.map((ms) => ({
+                value: ms.id,
+                label: ms.name,
+              })),
+            ]}
+          />
+          <Select
+            label="Priority"
+            value={taskPriority}
+            onChange={(e) => setTaskPriority(e.target.value)}
+            options={[
+              { value: 'LOW', label: 'Low' },
+              { value: 'MEDIUM', label: 'Medium' },
+              { value: 'HIGH', label: 'High' },
+              { value: 'CRITICAL', label: 'Critical' },
+            ]}
+          />
+          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
+            Create Task
+          </Button>
+        </form>
+      </Modal>
+
+      {/* Edit Project Settings & Category Modal (Admin) */}
+      <Modal isOpen={isEditProjectOpen} onClose={() => setIsEditProjectOpen(false)} title="Edit Project Category, Priority & Details">
+        <form onSubmit={handleUpdateProjectDetails} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Input
+            label="Project Title"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="Project name..."
+            required
+          />
+
+          <Select
+            label="Project Type / Category"
+            value={editProjectType}
+            onChange={(e) => setEditProjectType(e.target.value)}
+            options={[
+              { value: 'WEBSITE_WEBAPP', label: 'Website / Web Application' },
+              { value: 'MOBILE_APP', label: 'Mobile Application' },
+              { value: 'BMS', label: 'Building / Enterprise Management System (BMS)' },
+              { value: 'UNIVERSITY_NEP', label: 'University / NEP Platform' },
+              { value: 'DESIGN_SOCIAL_MEDIA', label: 'Design & Social Media Campaign' },
+              { value: 'PODCAST_MEDIA', label: 'Podcast & Media Production' },
+              { value: 'RESEARCH', label: 'Digital Research' },
+              { value: 'OTHER', label: 'Other Project' },
+            ]}
+          />
+
+          <Select
+            label="Project Priority"
+            value={editPriority}
+            onChange={(e) => setEditPriority(e.target.value)}
+            options={[
+              { value: 'LOW', label: 'Low Priority' },
+              { value: 'MEDIUM', label: 'Medium Priority' },
+              { value: 'HIGH', label: 'High Priority' },
+              { value: 'CRITICAL', label: 'Critical Priority' },
+            ]}
+          />
+
+          <TextArea
+            label="Project Scope & Deliverables"
+            value={editScope}
+            onChange={(e) => setEditScope(e.target.value)}
+            placeholder="Detailed scope..."
+          />
+
+          <TextArea
+            label="Background Description"
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            placeholder="Notes or description..."
+          />
+
+          <Button variant="gradient" type="submit" isLoading={isSavingProject} style={{ marginTop: '8px' }}>
+            Save Changes
+          </Button>
+        </form>
+      </Modal>
+
+      {/* Generate PDF Report Modal */}
+      <Modal isOpen={isPdfModalOpen} onClose={() => setIsPdfModalOpen(false)} title="Generate Executive Project PDF Report">
+        <form onSubmit={handleGeneratePdf} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Select
+            label="Time Horizon / Date Range Filter"
+            value={pdfTimeRange}
+            onChange={(e) => setPdfTimeRange(e.target.value)}
+            options={[
+              { value: 'ALL', label: '📅 All Time (Entire Project History)' },
+              { value: 'LAST_WEEK', label: '📌 Past 7 Days (Last Week)' },
+              { value: 'LAST_MONTH', label: '🗓️ Past 1 Month' },
+              { value: 'LAST_2_MONTHS', label: '📆 Past 2 Months' },
+              { value: 'LAST_3_MONTHS', label: '📊 Past 3 Months' },
+              { value: 'LAST_6_MONTHS', label: '📈 Past 6 Months' },
+              { value: 'LAST_YEAR', label: '🏆 Past 1 Year' },
+              { value: 'CUSTOM', label: '🛠️ Custom Date Range' },
+            ]}
+          />
+
+          {pdfTimeRange === 'CUSTOM' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <Input label="Start Date" type="date" value={pdfStartDate} onChange={(e) => setPdfStartDate(e.target.value)} required />
+              <Input label="End Date" type="date" value={pdfEndDate} onChange={(e) => setPdfEndDate(e.target.value)} required />
+            </div>
+          )}
+
+          <Select
+            label="Deliverable Tasks Filter"
+            value={pdfStatusFilter}
+            onChange={(e) => setPdfStatusFilter(e.target.value)}
+            options={[
+              { value: 'ALL', label: 'Include All Deliverable Tasks' },
+              { value: 'COMPLETED_ONLY', label: 'Only Completed Tasks' },
+              { value: 'ACTIVE_ONLY', label: 'Only Active / In-Progress Tasks' },
+            ]}
+          />
+
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+            <label style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
+              Include Report Sections:
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.85rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={pdfSections.summary}
+                  onChange={(e) => setPdfSections({ ...pdfSections, summary: e.target.checked })}
+                />
+                Executive Overview & Progress
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={pdfSections.members}
+                  onChange={(e) => setPdfSections({ ...pdfSections, members: e.target.checked })}
+                />
+                Team Members Roster
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={pdfSections.tasks}
+                  onChange={(e) => setPdfSections({ ...pdfSections, tasks: e.target.checked })}
+                />
+                Tasks & Milestones Matrix
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={pdfSections.comments}
+                  onChange={(e) => setPdfSections({ ...pdfSections, comments: e.target.checked })}
+                />
+                Comments & Discussions
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={pdfSections.attachments}
+                  onChange={(e) => setPdfSections({ ...pdfSections, attachments: e.target.checked })}
+                />
+                Uploaded Files & Attachments
+              </label>
+            </div>
+          </div>
+
+          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
+            <FileText size={16} /> Generate & Download PDF Report
+          </Button>
+        </form>
+      </Modal>
+    </div>
+  );
+};
