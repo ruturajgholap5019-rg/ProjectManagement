@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
+import hpp from 'hpp';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { env } from './config/env.js';
@@ -11,17 +13,26 @@ import { errorHandler } from './middlewares/error.middleware.js';
 const app = express();
 
 // Security Middlewares
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Allow inline styles & fonts in dev
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 app.use(
   cors({
     origin: env.CORS_ORIGIN,
     credentials: true,
   })
 );
+app.use(hpp());
+
+// Performance Compression Middleware
+app.use(compression());
 
 // Body Parsing Middlewares
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // Rate Limiting — Auth Endpoints
