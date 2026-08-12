@@ -201,8 +201,11 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
     if (onToggleFullScreenForm) onToggleFullScreenForm(true);
   };
 
+  const [isSavingUser, setIsSavingUser] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingUser) return;
 
     if (!isValidEmail(email)) {
       alert('Please enter a valid email address.');
@@ -217,6 +220,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
     const skillsString = selectedSkills.length > 0 ? selectedSkills.join(', ') : undefined;
     const finalTempPassword = tempPassword.trim() || `Temp#${Math.floor(1000 + Math.random() * 9000)}!`;
 
+    setIsSavingUser(true);
     try {
       if (editingUserId) {
         await apiFetch(`/users/${editingUserId}`, {
@@ -292,6 +296,8 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
       fetchUsers();
     } catch (err: any) {
       alert(err.message || 'Failed to save account details.');
+    } finally {
+      setIsSavingUser(false);
     }
   };
 
@@ -711,7 +717,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
             )}
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-              <Button variant="gradient" type="submit" style={{ flex: 1 }}>
+              <Button variant="gradient" type="submit" isLoading={isSavingUser} disabled={isSavingUser} style={{ flex: 1 }}>
                 {editingUserId ? 'Save Changes' : 'Create & Register Account'}
               </Button>
               <Button variant="secondary" type="button" onClick={closeForm}>

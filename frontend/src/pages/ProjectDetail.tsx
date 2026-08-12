@@ -12,9 +12,10 @@ import { ArrowLeft, CheckCircle2, UserPlus, UserX, AlertTriangle, Plus, MessageS
 interface ProjectDetailProps {
   projectId: string;
   onBack: () => void;
+  onToggleFullScreenForm?: (isFullScreen: boolean) => void;
 }
 
-export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onBack }) => {
+export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onBack, onToggleFullScreenForm }) => {
   const user = useAuthStore((state) => state.user);
 
   const [project, setProject] = useState<any>(null);
@@ -97,6 +98,35 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     setTaskAssignees((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
     );
+  };
+
+  // Submitting States
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [isCreatingMilestone, setIsCreatingMilestone] = useState(false);
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [isPostingComment, setIsPostingComment] = useState(false);
+
+  const openTaskModal = () => {
+    setIsTaskOpen(true);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(true);
+  };
+  const closeTaskModal = () => {
+    setIsTaskOpen(false);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(false);
+  };
+
+  const openMilestoneModal = () => {
+    setIsMilestoneOpen(true);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(true);
+  };
+  const closeMilestoneModal = () => {
+    setIsMilestoneOpen(false);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(false);
+  };
+
+  const closeAddMemberModal = () => {
+    setIsAddMemberOpen(false);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(false);
   };
 
   // New Comment
@@ -209,6 +239,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       const users = await apiFetch<any[]>('/users');
       setAllUsers(users);
       setIsAddMemberOpen(true);
+      if (onToggleFullScreenForm) onToggleFullScreenForm(true);
     } catch {
       alert('Failed to load user list');
     }
@@ -216,19 +247,22 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId) return;
+    if (!selectedUserId || isAddingMember) return;
 
+    setIsAddingMember(true);
     try {
       await apiFetch(`/projects/${projectId}/members`, {
         method: 'POST',
         body: JSON.stringify({ userId: selectedUserId }),
       });
 
-      setIsAddMemberOpen(false);
+      closeAddMemberModal();
       setSelectedUserId('');
       fetchProjectDetails();
     } catch (err: any) {
       alert(err.message || 'Failed to add member');
+    } finally {
+      setIsAddingMember(false);
     }
   };
 
@@ -260,22 +294,30 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
   const handleCreateMilestone = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreatingMilestone) return;
+
+    setIsCreatingMilestone(true);
     try {
       await apiFetch(`/projects/${projectId}/milestones`, {
         method: 'POST',
         body: JSON.stringify({ name: milestoneName, description: milestoneDesc }),
       });
-      setIsMilestoneOpen(false);
+      closeMilestoneModal();
       setMilestoneName('');
       setMilestoneDesc('');
       fetchProjectDetails();
     } catch (err: any) {
       alert(err.message || 'Failed to create milestone');
+    } finally {
+      setIsCreatingMilestone(false);
     }
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreatingTask) return;
+
+    setIsCreatingTask(true);
     try {
       await apiFetch(`/projects/${projectId}/tasks`, {
         method: 'POST',
@@ -288,7 +330,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
           priority: taskPriority,
         }),
       });
-      setIsTaskOpen(false);
+      closeTaskModal();
       setTaskTitle('');
       setTaskDesc('');
       setTaskAssignee('');
@@ -296,6 +338,8 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       fetchProjectDetails();
     } catch (err: any) {
       alert(err.message || 'Failed to create task');
+    } finally {
+      setIsCreatingTask(false);
     }
   };
 
@@ -321,8 +365,9 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || isPostingComment) return;
 
+    setIsPostingComment(true);
     try {
       await apiFetch('/comments', {
         method: 'POST',
@@ -332,6 +377,8 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       fetchProjectDetails();
     } catch (err: any) {
       alert(err.message || 'Failed to post comment');
+    } finally {
+      setIsPostingComment(false);
     }
   };
 
@@ -599,10 +646,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
             <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>Project Deliverables & Milestones</h3>
             {isLeadOrAdmin && (
               <div style={{ display: 'flex', gap: '10px' }}>
-                <Button size="sm" variant="secondary" onClick={() => setIsMilestoneOpen(true)}>
+                <Button size="sm" variant="secondary" onClick={openMilestoneModal}>
                   <Plus size={16} /> Create Milestone
                 </Button>
-                <Button size="sm" variant="gradient" onClick={() => setIsTaskOpen(true)}>
+                <Button size="sm" variant="gradient" onClick={openTaskModal}>
                   <Plus size={16} /> Create Task
                 </Button>
               </div>
@@ -894,7 +941,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       </Modal>
 
       {/* Add Member Modal */}
-      <Modal isOpen={isAddMemberOpen} onClose={() => setIsAddMemberOpen(false)} title="Add Team Member to Project">
+      <Modal isOpen={isAddMemberOpen} onClose={closeAddMemberModal} title="Add Team Member to Project">
         <form onSubmit={handleAddMember} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Select
             label="Select User"
@@ -908,7 +955,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
               })),
             ]}
           />
-          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
+          <Button variant="gradient" type="submit" isLoading={isAddingMember} disabled={isAddingMember} style={{ marginTop: '8px' }}>
             Add Member
           </Button>
         </form>
@@ -938,18 +985,18 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       />
 
       {/* Create Milestone Modal */}
-      <Modal isOpen={isMilestoneOpen} onClose={() => setIsMilestoneOpen(false)} title="Create Project Milestone">
+      <Modal isOpen={isMilestoneOpen} onClose={closeMilestoneModal} title="Create Project Milestone">
         <form onSubmit={handleCreateMilestone} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Input label="Milestone Name" value={milestoneName} onChange={(e) => setMilestoneName(e.target.value)} placeholder="e.g. Phase 1 — Database & Authentication" required />
           <TextArea label="Description" value={milestoneDesc} onChange={(e) => setMilestoneDesc(e.target.value)} placeholder="Key scope objectives of this milestone..." />
-          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
+          <Button variant="gradient" type="submit" isLoading={isCreatingMilestone} disabled={isCreatingMilestone} style={{ marginTop: '8px' }}>
             Create Milestone
           </Button>
         </form>
       </Modal>
 
       {/* Create Task Modal */}
-      <Modal isOpen={isTaskOpen} onClose={() => setIsTaskOpen(false)} title="Create Project Task">
+      <Modal isOpen={isTaskOpen} onClose={closeTaskModal} title="Create Project Task">
         <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Input label="Task Title" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="e.g. Implement User Role Auth Middleware" required />
           <TextArea label="Task Description" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} placeholder="Technical requirements, acceptance criteria..." />
@@ -1018,7 +1065,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
               { value: 'CRITICAL', label: 'Critical' },
             ]}
           />
-          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
+          <Button variant="gradient" type="submit" isLoading={isCreatingTask} disabled={isCreatingTask} style={{ marginTop: '8px' }}>
             Create Task
           </Button>
         </form>

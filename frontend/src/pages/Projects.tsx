@@ -100,8 +100,12 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
     }
   }, [user]);
 
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreatingProject) return;
+    setIsCreatingProject(true);
     try {
       await apiFetch('/projects', {
         method: 'POST',
@@ -125,6 +129,8 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
       fetchProjects();
     } catch (err: any) {
       alert(err.message || 'Failed to create project');
+    } finally {
+      setIsCreatingProject(false);
     }
   };
 
@@ -278,7 +284,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
             />
 
             <div style={{ display: 'flex', gap: '14px', marginTop: '12px' }}>
-              <Button variant="gradient" type="submit" style={{ flex: 1, padding: '12px' }}>
+              <Button variant="gradient" type="submit" isLoading={isCreatingProject} disabled={isCreatingProject} style={{ flex: 1, padding: '12px' }}>
                 <FolderPlus size={18} style={{ marginRight: '8px' }} />
                 Create & Register Project
               </Button>

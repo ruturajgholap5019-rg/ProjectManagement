@@ -889,7 +889,11 @@ export const App: React.FC = () => {
               />
             )}
             {activeTab === 'projects' && selectedProjectId && (
-              <ProjectDetailPage projectId={selectedProjectId} onBack={() => navigateTo('projects', null)} />
+              <ProjectDetailPage
+                projectId={selectedProjectId}
+                onBack={() => navigateTo('projects', null)}
+                onToggleFullScreenForm={setIsFullScreenFormActive}
+              />
             )}
             {activeTab === 'students' && selectedStudentId && (
               <StudentProfilePage userId={selectedStudentId} onBack={() => navigateTo('users')} onSelectProject={(id) => navigateTo('projects', id)} />
