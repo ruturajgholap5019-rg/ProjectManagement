@@ -434,7 +434,17 @@ export class UserService {
       },
     });
 
-    return { userId, tempPassword };
+    // Send password reset email notification
+    const { emailService } = await import('../../services/email.service.js');
+    try {
+      await emailService.sendPasswordResetEmail(
+        user.email,
+        `${user.firstName} ${user.lastName}`,
+        tempPassword
+      );
+    } catch (emailErr) {
+      console.error('Failed to send password reset email:', emailErr);
+    }
 
     return { userId, tempPassword };
   }

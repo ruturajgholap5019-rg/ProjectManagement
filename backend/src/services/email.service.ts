@@ -87,6 +87,33 @@ class EmailService {
     await this.sendEmail(toEmail, `Welcome to Project Tracker - Account Credentials`, html);
   }
 
+  async sendPasswordResetEmail(toEmail: string, studentName: string, newTempPassword: string) {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+        <h2 style="color: #4f46e5; margin-top: 0;">🔑 Password Reset Notification</h2>
+        <p>Hello <strong>${studentName}</strong>,</p>
+        <p>Your account password has been updated by the Organization Admin. Below are your new temporary login credentials:</p>
+        
+        <div style="background-color: #f8fafc; padding: 18px; border-radius: 8px; border-left: 4px solid #4f46e5; margin: 20px 0; font-size: 14px;">
+          <p style="margin: 0 0 10px 0; color: #0f172a;"><strong>Registered Email:</strong> <span style="color: #4f46e5;">${toEmail}</span></p>
+          <p style="margin: 0 0 10px 0; color: #0f172a;"><strong>New Password:</strong> <code style="background-color: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px; font-weight: bold;">${newTempPassword}</code></p>
+        </div>
+
+        <p style="color: #475569; font-size: 13px;">
+          ⚠️ <em>Security Notice: Please login using this new temporary password and update it from your account settings.</em>
+        </p>
+
+        <div style="margin-top: 24px;">
+          <a href="http://localhost:5173" style="display: inline-block; background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+            Login to Project Tracker
+          </a>
+        </div>
+      </div>
+    `;
+
+    await this.sendEmail(toEmail, `Password Reset - Project Tracker Account Credentials`, html);
+  }
+
   async sendTaskAssignmentEmail(
     studentEmail: string,
     studentName: string,
