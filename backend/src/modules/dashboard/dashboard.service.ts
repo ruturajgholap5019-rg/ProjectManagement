@@ -16,7 +16,7 @@ export class DashboardService {
       prisma.project.count({ where: { status: { not: 'CANCELLED' } } }),
       prisma.project.count({ where: { status: { in: ['ACTIVE', 'ONGOING'] } } }),
       prisma.project.count({ where: { status: 'AT_RISK' } }),
-      prisma.user.count({ where: { isActive: true } }),
+      prisma.user.count({ where: { isActive: true, role: { not: 'ADMIN' } } }),
       prisma.task.count({ where: { status: { in: ['TODO', 'IN_PROGRESS', 'REVIEW', 'REVISION'] } } }),
     ]);
 

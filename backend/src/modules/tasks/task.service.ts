@@ -80,7 +80,7 @@ export class TaskService {
     if (filters.assigneeId) where.assigneeId = filters.assigneeId;
     if (filters.status) where.status = filters.status;
     if (filters.milestoneId) where.milestoneId = filters.milestoneId;
-    if (filters.search) where.title = { contains: filters.search, mode: 'insensitive' };
+    if (filters.search) where.title = { contains: filters.search };
 
     const tasks = await prisma.task.findMany({
       where,

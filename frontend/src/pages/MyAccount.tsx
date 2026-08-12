@@ -105,7 +105,7 @@ export const MyAccountPage: React.FC<MyAccountPageProps> = ({ onOpenChangePasswo
   };
 
   return (
-    <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '1080px', margin: '0 auto' }}>
+    <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '1280px', margin: '0 auto' }}>
       {/* Page Header */}
       <div style={{ marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>

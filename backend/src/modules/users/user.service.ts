@@ -244,7 +244,7 @@ export class UserService {
       firstName: data.firstName ? data.firstName.trim() : existing.firstName,
       lastName: data.lastName ? data.lastName.trim() : existing.lastName,
       email: data.email ? data.email.toLowerCase().trim() : existing.email,
-      phone: data.phone !== undefined ? data.phone.trim() : existing.phone,
+      phone: data.phone !== undefined ? (data.phone ? data.phone.trim() : null) : existing.phone,
       bio: data.bio !== undefined ? data.bio.trim() : existing.bio,
       instagramUrl: data.instagramUrl !== undefined ? data.instagramUrl.trim() : existing.instagramUrl,
       linkedinUrl: data.linkedinUrl !== undefined ? data.linkedinUrl.trim() : existing.linkedinUrl,
@@ -255,8 +255,8 @@ export class UserService {
       memberType: data.memberType || existing.memberType || MemberType.STUDENT,
     };
 
-    if (data.password || data.tempPassword) {
-      const pass = (data.password || data.tempPassword).trim();
+    if (data.password || data.tempPassword || data.rawPassword) {
+      const pass = (data.password || data.tempPassword || data.rawPassword).trim();
       if (pass) {
         updatePayload.passwordHash = await bcrypt.hash(pass, 12);
         updatePayload.rawPassword = pass;

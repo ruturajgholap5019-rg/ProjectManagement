@@ -12,10 +12,22 @@ import { errorHandler } from './middlewares/error.middleware.js';
 
 const app = express();
 
+// Enable Trust Proxy for Cloudflare & Reverse Proxies
+app.set('trust proxy', true);
+
+// Extract Real Client IP from Cloudflare CF-Connecting-IP Header
+app.use((req, _res, next) => {
+  const cfIp = req.headers['cf-connecting-ip'];
+  if (cfIp && typeof cfIp === 'string') {
+    (req as any).realClientIp = cfIp;
+  }
+  next();
+});
+
 // Security Middlewares
 app.use(
   helmet({
-    contentSecurityPolicy: false, // Allow inline styles & fonts in dev
+    contentSecurityPolicy: false, // Allow inline styles & fonts
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );

@@ -7,7 +7,7 @@ import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { Badge } from '../components/UI/Badge';
 import { StudentProfilePage } from './StudentProfile';
 import { isValidPhone, isValidEmail } from '../utils/validation';
-import { UserPlus, UserCheck, UserX, KeyRound, Edit2, Trash2, Users as UsersIcon, Sparkles, Shuffle, Copy, Check, LayoutDashboard, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, UserCheck, UserX, KeyRound, Edit2, Trash2, Users as UsersIcon, Sparkles, Shuffle, Copy, Check, LayoutDashboard, ArrowLeft, Eye, EyeOff, X, Plus, ChevronDown } from 'lucide-react';
 
 interface UserItem {
   id: string;
@@ -30,11 +30,35 @@ interface ProjectItem {
   status: string;
 }
 
+const PRESET_SKILLS = [
+  'React.js',
+  'Node.js',
+  'TypeScript',
+  'JavaScript',
+  'Python',
+  'HTML/CSS',
+  'UI/UX Design',
+  'Figma',
+  'Database & SQL',
+  'MongoDB',
+  'QA & Testing',
+  'DevOps & Cloud',
+  'Mobile App Dev',
+  'Flutter',
+  'React Native',
+  'Content Writing',
+  'Digital Marketing',
+  'Video & Media Editing',
+  'Data Science',
+  'Project Management',
+];
+
 interface UsersPageProps {
   onSelectStudent?: (userId: string) => void;
+  onToggleFullScreenForm?: (active: boolean) => void;
 }
 
-export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
+export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleFullScreenForm }) => {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,7 +74,9 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [skillsInput, setSkillsInput] = useState('');
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [customSkillInput, setCustomSkillInput] = useState('');
+  const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState(false);
   const [formProjectId, setFormProjectId] = useState('');
   const [formProjectRole, setFormProjectRole] = useState('');
   const [tempPassword, setTempPassword] = useState('');
@@ -117,12 +143,25 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
   };
 
   const handlePhoneChange = (val: string) => {
+    const cleaned = val.replace(/\D/g, '');
     setPhone(val);
-    if (val.trim() && !isValidPhone(val)) {
-      setPhoneError('Please enter a valid 10-digit Indian phone number (e.g. 9876543210)');
+
+    if (val.length > 10 || cleaned.length > 10) {
+      setPhoneError('Invalid phone number: Exceeds 10 digits (Max 10 allowed)');
+    } else if (val.trim() && cleaned.length < 10) {
+      setPhoneError('Phone number must be exactly 10 digits (e.g. 9876543210)');
+    } else if (val.trim() && val !== cleaned) {
+      setPhoneError('Phone number can only contain numeric digits');
     } else {
       setPhoneError('');
     }
+  };
+
+  const closeForm = () => {
+    setIsDedicatedFormPage(false);
+    setIsModalOpen(false);
+    setIsPresetDropdownOpen(false);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(false);
   };
 
   const handleOpenCreate = () => {
@@ -131,13 +170,16 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
     setLastName('');
     setEmail('');
     setPhone('');
-    setSkillsInput('');
+    setSelectedSkills([]);
+    setCustomSkillInput('');
+    setIsPresetDropdownOpen(false);
     setFormProjectId('');
     setFormProjectRole('');
     setPhoneError('');
-    setTempPassword(`Temp#${Math.floor(1000 + Math.random() * 9000)}!`);
+    setTempPassword('');
     setIsDedicatedFormPage(true);
     setIsModalOpen(false);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(true);
   };
 
   const handleOpenEdit = (user: UserItem) => {
@@ -146,13 +188,17 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
     setLastName(user.lastName);
     setEmail(user.email);
     setPhone(user.phone || '');
-    setSkillsInput(user.skills?.map((s) => s.skillName).join(', ') || '');
+    const userSkills = user.skills?.map((s) => s.skillName) || [];
+    setSelectedSkills(userSkills);
+    setCustomSkillInput('');
+    setIsPresetDropdownOpen(false);
     setFormProjectId(user.projectMemberships?.[0]?.project?.id || '');
     setFormProjectRole('');
     setPhoneError('');
-    setTempPassword(user.rawPassword || '');
+    setTempPassword('');
     setIsDedicatedFormPage(true);
     setIsModalOpen(false);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -168,6 +214,9 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
       return;
     }
 
+    const skillsString = selectedSkills.length > 0 ? selectedSkills.join(', ') : undefined;
+    const finalTempPassword = tempPassword.trim() || `Temp#${Math.floor(1000 + Math.random() * 9000)}!`;
+
     try {
       if (editingUserId) {
         await apiFetch(`/users/${editingUserId}`, {
@@ -175,78 +224,71 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
           body: JSON.stringify({
             firstName,
             lastName,
+            email,
             phone: phone.trim() || undefined,
             rawPassword: tempPassword.trim() || undefined,
+            skills: skillsString,
+            projectId: formProjectId || undefined,
           }),
         });
 
-        if (skillsInput.trim()) {
-          const skillsList = skillsInput
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean);
-          await apiFetch(`/users/${editingUserId}/skills`, {
-            method: 'POST',
-            body: JSON.stringify({ skills: skillsList }),
-          });
-        }
-
-        if (formProjectId) {
-          await apiFetch(`/projects/${formProjectId}/members`, {
-            method: 'POST',
-            body: JSON.stringify({
-              userId: editingUserId,
-              role: formProjectRole || 'Team Contributor',
-            }),
-          });
+        if (formProjectId && formProjectRole) {
+          try {
+            await apiFetch(`/projects/${formProjectId}/members`, {
+              method: 'POST',
+              body: JSON.stringify({
+                userId: editingUserId,
+                role: formProjectRole,
+              }),
+            });
+          } catch {
+            // Ignore if already project member
+          }
         }
       } else {
-        const newUser = await apiFetch<UserItem>('/users', {
+        const createRes = await apiFetch<{ user?: UserItem; tempPassword?: string } | UserItem>('/users', {
           method: 'POST',
           body: JSON.stringify({
             firstName,
             lastName,
             email,
             phone: phone.trim() || undefined,
-            tempPassword,
+            tempPassword: finalTempPassword,
             role: 'TEAM_MEMBER',
             memberType: 'STUDENT',
+            skills: skillsString,
+            projectId: formProjectId || undefined,
           }),
         });
 
-        if (skillsInput.trim()) {
-          const skillsList = skillsInput
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean);
-          await apiFetch(`/users/${newUser.id}/skills`, {
-            method: 'POST',
-            body: JSON.stringify({ skills: skillsList }),
-          });
-        }
+        const createdUser: UserItem = (createRes as any)?.user || createRes;
+        const returnedTempPassword = (createRes as any)?.tempPassword || finalTempPassword;
 
-        if (formProjectId) {
-          await apiFetch(`/projects/${formProjectId}/members`, {
-            method: 'POST',
-            body: JSON.stringify({
-              userId: newUser.id,
-              role: formProjectRole || 'Team Contributor',
-            }),
-          });
+        if (formProjectId && formProjectRole && createdUser?.id) {
+          try {
+            await apiFetch(`/projects/${formProjectId}/members`, {
+              method: 'POST',
+              body: JSON.stringify({
+                userId: createdUser.id,
+                role: formProjectRole,
+              }),
+            });
+          } catch {
+            // Ignore if already assigned
+          }
         }
 
         setCreatedAccountDetails({
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          tempPassword,
-          role: 'TEAM_MEMBER',
-          memberType: 'STUDENT',
+          email: createdUser.email || email,
+          firstName: createdUser.firstName || firstName,
+          lastName: createdUser.lastName || lastName,
+          tempPassword: returnedTempPassword,
+          role: createdUser.role || 'TEAM_MEMBER',
+          memberType: createdUser.memberType || 'STUDENT',
         });
       }
 
-      setIsDedicatedFormPage(false);
-      setIsModalOpen(false);
+      closeForm();
       fetchUsers();
     } catch (err: any) {
       alert(err.message || 'Failed to save account details.');
@@ -352,9 +394,9 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
   // Dedicated Page view for Creating or Editing Accounts
   if (isDedicatedFormPage) {
     return (
-      <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '800px', margin: '0 auto' }}>
+      <div className="animate-fade-in" style={{ padding: '36px 0', width: '90%', maxWidth: '1200px', margin: '0 auto' }}>
         <button
-          onClick={() => setIsDedicatedFormPage(false)}
+          onClick={closeForm}
           style={{
             background: 'none',
             border: 'none',
@@ -371,43 +413,229 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
           <ArrowLeft size={18} /> Back to Users Directory
         </button>
 
-        <div className="glass-card" style={{ padding: '32px' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '6px' }}>
+        <div className="glass-card" style={{ padding: '24px 28px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
             {editingUserId ? 'Edit User Details' : 'Register New Student / Team Member'}
           </h2>
-          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '24px' }}>
+          <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
             {editingUserId
               ? 'Update member profile information, assigned skills, and project membership.'
               : 'Create a new account. An automated credential email will be dispatched to the member.'}
           </p>
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <Input label="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required placeholder="e.g. John" />
               <Input label="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required placeholder="e.g. Doe" />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <Input label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={Boolean(editingUserId)} required placeholder="student@organization.com" />
               <Input
-                label="Phone Number (10-Digit Indian No, Optional)"
+                label="Optional 10-Digit Mobile Number"
                 type="tel"
                 value={phone}
                 onChange={(e) => handlePhoneChange(e.target.value)}
                 placeholder="e.g. 9876543210"
-                helperText={phoneError || 'Optional: 10-digit Indian mobile number'}
+                error={phoneError || undefined}
+                helperText={phoneError ? undefined : 'Optional 10-digit mobile number'}
               />
             </div>
 
-            <Input
-              label="Technical Skills (Comma separated)"
-              value={skillsInput}
-              onChange={(e) => setSkillsInput(e.target.value)}
-              placeholder="e.g. React, Node.js, Database, UI/UX"
-              helperText="Enter skills separated by commas"
-            />
+            <div>
+              <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                Skills (Optional)
+              </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+              {/* Active Skill Badges */}
+              {selectedSkills.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  {selectedSkills.map((sk) => (
+                    <span
+                      key={sk}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        backgroundColor: 'var(--primary-light)',
+                        color: 'var(--primary)',
+                        fontSize: '0.80rem',
+                        fontWeight: 700,
+                        padding: '3px 10px',
+                        borderRadius: 'var(--radius-full)',
+                        border: '1px solid var(--primary)',
+                      }}
+                    >
+                      {sk}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSkills(selectedSkills.filter((s) => s !== sk))}
+                        style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                        title="Remove skill"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Single Unified Skill Text Box with Dropdown Toggle & Right-Side + Add Icon Button */}
+              <div style={{ position: 'relative' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: 'var(--bg-main)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '2px 4px 2px 12px',
+                    transition: 'border-color 0.2s ease',
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Type a skill name or click arrow for list..."
+                    value={customSkillInput}
+                    onChange={(e) => setCustomSkillInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = customSkillInput.trim();
+                        if (val && !selectedSkills.includes(val)) {
+                          setSelectedSkills([...selectedSkills, val]);
+                          setCustomSkillInput('');
+                          setIsPresetDropdownOpen(false);
+                        }
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                      fontWeight: 500,
+                      outline: 'none',
+                      height: '34px',
+                    }}
+                  />
+
+                  {/* Show Dropdown List Icon Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsPresetDropdownOpen(!isPresetDropdownOpen)}
+                    title="Toggle preset skills list"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      padding: '6px 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <ChevronDown size={18} style={{ transform: isPresetDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
+                  </button>
+
+                  {/* Right-Side + Add Icon Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = customSkillInput.trim();
+                      if (val && !selectedSkills.includes(val)) {
+                        setSelectedSkills([...selectedSkills, val]);
+                        setCustomSkillInput('');
+                        setIsPresetDropdownOpen(false);
+                      }
+                    }}
+                    title="Add skill item"
+                    style={{
+                      backgroundColor: 'var(--primary)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '6px 14px',
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      whiteSpace: 'nowrap',
+                      boxShadow: 'var(--shadow-sm)',
+                    }}
+                  >
+                    <Plus size={16} /> Add
+                  </button>
+                </div>
+
+                {/* Floating Preset Skills Dropdown List */}
+                {isPresetDropdownOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 4px)',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: 'var(--shadow-lg)',
+                      zIndex: 100,
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      padding: '6px 0',
+                    }}
+                  >
+                    {PRESET_SKILLS.filter(
+                      (s) =>
+                        !selectedSkills.includes(s) &&
+                        s.toLowerCase().includes(customSkillInput.toLowerCase().trim())
+                    ).length === 0 ? (
+                      <div style={{ padding: '10px 14px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        No matching preset skills found. Type above to add as custom skill.
+                      </div>
+                    ) : (
+                      PRESET_SKILLS.filter(
+                        (s) =>
+                          !selectedSkills.includes(s) &&
+                          s.toLowerCase().includes(customSkillInput.toLowerCase().trim())
+                      ).map((s) => (
+                        <div
+                          key={s}
+                          onClick={() => {
+                            setSelectedSkills([...selectedSkills, s]);
+                            setCustomSkillInput('');
+                            setIsPresetDropdownOpen(false);
+                          }}
+                          style={{
+                            padding: '8px 14px',
+                            fontSize: '0.85rem',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            transition: 'background-color 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-main)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                        >
+                          <span>{s}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>+ Select</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <Select
                 label="Assign Project (Optional)"
                 value={formProjectId}
@@ -443,7 +671,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                    Initial Temporary Password
+                    Initial Temporary Password (Optional)
                   </label>
                   <button
                     type="button"
@@ -465,10 +693,10 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
                 </div>
                 <Input
                   type="password"
+                  placeholder="Leave blank to auto-generate password..."
                   value={tempPassword}
                   onChange={(e) => setTempPassword(e.target.value)}
-                  required
-                  helperText="User will be forced to change this password on their first login."
+                  helperText="Optional: Leave blank to auto-generate a secure random temporary password."
                 />
               </div>
             ) : (
@@ -486,7 +714,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent }) => {
               <Button variant="gradient" type="submit" style={{ flex: 1 }}>
                 {editingUserId ? 'Save Changes' : 'Create & Register Account'}
               </Button>
-              <Button variant="secondary" type="button" onClick={() => setIsDedicatedFormPage(false)}>
+              <Button variant="secondary" type="button" onClick={closeForm}>
                 Cancel
               </Button>
             </div>

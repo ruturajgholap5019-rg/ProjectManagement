@@ -138,6 +138,13 @@ export const WorkActivitiesPage: React.FC = () => {
     if (selectedCategory && act.project?.projectType !== selectedCategory) {
       return false;
     }
+    if (search.trim()) {
+      const q = search.toLowerCase().trim();
+      const matchesDesc = act.workDescription ? act.workDescription.toLowerCase().includes(q) : false;
+      const matchesProj = act.project?.name ? act.project.name.toLowerCase().includes(q) : false;
+      const matchesUser = act.user ? `${act.user.firstName} ${act.user.lastName}`.toLowerCase().includes(q) : false;
+      if (!matchesDesc && !matchesProj && !matchesUser) return false;
+    }
     return true;
   });
 

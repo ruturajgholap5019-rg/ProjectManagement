@@ -42,6 +42,9 @@ export const App: React.FC = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
+  // Full-Screen Creation Form View State
+  const [isFullScreenFormActive, setIsFullScreenFormActive] = useState(false);
+
   // Sync state from clean URL path on page load / popstate
   const parseCurrentPath = () => {
     let path = window.location.pathname;
@@ -119,11 +122,40 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) {
       parseCurrentPath();
-      const handlePopState = () => parseCurrentPath();
-      window.addEventListener('popstate', handlePopState);
-      return () => window.removeEventListener('popstate', handlePopState);
+      const handleNavState = () => parseCurrentPath();
+      window.addEventListener('popstate', handleNavState);
+      window.addEventListener('hashchange', handleNavState);
+      return () => {
+        window.removeEventListener('popstate', handleNavState);
+        window.removeEventListener('hashchange', handleNavState);
+      };
     }
   }, [isAuthenticated, user?.role]);
+
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+
+      if (currentScrollY <= 15) {
+        setIsHeaderVisible(true);
+      } else if (currentScrollY > lastScrollY && currentScrollY > 70) {
+        // Scrolling Down -> Disappear Navbar
+        setIsHeaderVisible(false);
+      } else if (currentScrollY < lastScrollY) {
+        // Scrolling Up -> Show Navbar
+        setIsHeaderVisible(true);
+      }
+
+      lastScrollY = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -224,27 +256,28 @@ export const App: React.FC = () => {
         <ChangePasswordModal isOpen={isChangePassOpen} onClose={() => setIsChangePassOpen(false)} />
 
         {/* Mobile Sidebar Backdrop Overlay */}
-        {isMobileMenuOpen && (
+        {!isFullScreenFormActive && isMobileMenuOpen && (
           <div className="sidebar-backdrop" onClick={() => setIsMobileMenuOpen(false)} />
         )}
 
         {/* Fixed Sticky Left Sidebar Navigation */}
-        <aside
-          className={`app-sidebar ${isMobileMenuOpen ? 'open' : ''}`}
-          style={{
-            width: '260px',
-            height: '100vh',
-            position: 'sticky',
-            top: 0,
-            backgroundColor: 'var(--bg-sidebar)',
-            borderRight: '1px solid var(--border-color)',
-            display: 'flex',
-            flexDirection: 'column',
-            flexShrink: 0,
-            zIndex: 100,
-            overflowY: 'auto',
-          }}
-        >
+        {!isFullScreenFormActive && (
+          <aside
+            className={`app-sidebar ${isMobileMenuOpen ? 'open' : ''}`}
+            style={{
+              width: '260px',
+              height: '100vh',
+              position: 'sticky',
+              top: 0,
+              backgroundColor: 'var(--bg-sidebar)',
+              borderRight: '1px solid var(--border-color)',
+              display: 'flex',
+              flexDirection: 'column',
+              flexShrink: 0,
+              zIndex: 100,
+              overflowY: 'auto',
+            }}
+          >
           {/* Sidebar Header */}
           <div style={{ padding: '24px 22px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
@@ -515,25 +548,29 @@ export const App: React.FC = () => {
             </button>
           </div>
         </aside>
+        )}
 
         {/* Main Workspace Area with Header Navigation */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
           {/* Top Glassmorphic Navigation Header Bar */}
-          <header
-            className="glass-panel"
-            style={{
-              height: '68px',
-              position: 'sticky',
-              top: 0,
-              borderBottom: '1px solid var(--border-color)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0 24px',
-              flexShrink: 0,
-              zIndex: 50,
-            }}
-          >
+          {!isFullScreenFormActive && (
+            <header
+              className="glass-panel"
+              style={{
+                height: '68px',
+                position: 'sticky',
+                top: 0,
+                borderBottom: '1px solid var(--border-color)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0 24px',
+                flexShrink: 0,
+                zIndex: 50,
+                transform: isHeaderVisible ? 'translateY(0)' : 'translateY(-100%)',
+                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+            >
             {/* Mobile Header Left Section */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <button
@@ -840,12 +877,16 @@ export const App: React.FC = () => {
               </button>
             </div>
           </header>
+          )}
 
           {/* Page Content Workspace */}
           <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-main)' }}>
             {activeTab === 'dashboard' && <DashboardPage />}
             {activeTab === 'projects' && !selectedProjectId && (
-              <ProjectsPage onSelectProject={(id) => navigateTo('projects', id)} />
+              <ProjectsPage
+                onSelectProject={(id) => navigateTo('projects', id)}
+                onToggleFullScreenForm={setIsFullScreenFormActive}
+              />
             )}
             {activeTab === 'projects' && selectedProjectId && (
               <ProjectDetailPage projectId={selectedProjectId} onBack={() => navigateTo('projects', null)} />
@@ -856,7 +897,10 @@ export const App: React.FC = () => {
             {activeTab === 'activities' && <WorkActivitiesPage />}
             {activeTab === 'search' && <GlobalSearchPage initialQuery={navSearchQuery} />}
             {activeTab === 'users' && user.role === 'ADMIN' && (
-              <UsersPage onSelectStudent={(id) => navigateTo('students', id)} />
+              <UsersPage
+                onSelectStudent={(id) => navigateTo('students', id)}
+                onToggleFullScreenForm={setIsFullScreenFormActive}
+              />
             )}
             {activeTab === 'tasks' && (
               <MyTasksPage onSelectProject={(id) => navigateTo('projects', id)} />

@@ -119,7 +119,6 @@ export class AuthService {
         mustChangePassword: false,
       },
     });
-
     return { message: 'Password changed successfully' };
   }
 }

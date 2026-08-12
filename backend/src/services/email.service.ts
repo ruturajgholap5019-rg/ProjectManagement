@@ -37,22 +37,21 @@ class EmailService {
         });
 
         if (error) {
-          console.error(`❌ [RESEND ERROR] Failed to send email via Resend API:`, error.message);
-          return null;
+          console.warn(`⚠️ [RESEND NOTICE] Could not deliver via Resend API (${error.message}). Falling back to local logger.`);
+        } else {
+          console.log(`\n✅ 📧 [RESEND LIVE EMAIL DISPATCHED]`);
+          console.log(`   Resend Email ID: ${data?.id}`);
+          console.log(`   To: ${to}`);
+          console.log(`   Subject: ${subject}\n`);
+          return data;
         }
-
-        console.log(`\n✅ 📧 [RESEND LIVE EMAIL DISPATCHED]`);
-        console.log(`   Resend Email ID: ${data?.id}`);
-        console.log(`   To: ${to}`);
-        console.log(`   Subject: ${subject}\n`);
-        return data;
       } catch (err: any) {
-        console.error(`❌ [RESEND EXCEPTION] Failed to communicate with Resend API:`, err.message);
+        console.warn(`⚠️ [RESEND EXCEPTION] ${err.message}. Falling back to local logger.`);
       }
     }
 
     // Console logging fallback
-    console.log(`\n📧 [EMAIL SERVICE LOG]`);
+    console.log(`\n📧 [EMAIL SERVICE LOCAL DISPATCH LOG]`);
     console.log(`   To: ${to}`);
     console.log(`   Subject: ${subject}`);
     console.log(`   --------------------------------------------------`);

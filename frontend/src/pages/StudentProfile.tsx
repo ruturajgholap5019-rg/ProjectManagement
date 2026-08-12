@@ -488,27 +488,32 @@ export const StudentProfilePage: React.FC<StudentProfileProps> = ({ userId, onBa
                       </div>
                     </div>
 
-                    {onSelectProject && (
-                      <button
-                        type="button"
-                        onClick={() => onSelectProject(proj.id)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: 'var(--radius-md)',
-                          border: '1px solid var(--border-color)',
-                          backgroundColor: 'var(--bg-card)',
-                          color: 'var(--primary)',
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}
-                      >
-                        View Project <ExternalLink size={12} />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSelectProject) {
+                          onSelectProject(proj.id);
+                        } else {
+                          window.history.pushState({}, '', `/projects/${proj.id}`);
+                          window.dispatchEvent(new Event('popstate'));
+                        }
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: 'var(--bg-card)',
+                        color: 'var(--primary)',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      View Project <ExternalLink size={12} />
+                    </button>
                   </div>
                 );
               })}

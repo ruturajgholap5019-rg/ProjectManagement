@@ -856,9 +856,9 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
         isOpen={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}
         onConfirm={handleConfirmDeleteProject}
-        title="Cancel & Archive Project"
-        message="Are you sure you want to cancel this project? Status will be set to CANCELLED and all historical deliverables will be preserved."
-        confirmText="Cancel Project"
+        title="Delete & Remove Project"
+        message="Are you sure you want to delete this project? The project and all its associated milestones, tasks, members, and activity logs will be permanently removed."
+        confirmText="Delete & Remove Project"
         variant="danger"
         isLoading={isDeletingProject}
       />

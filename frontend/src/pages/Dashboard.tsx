@@ -58,8 +58,9 @@ export const DashboardPage: React.FC = () => {
 
   const { type, stats } = dashboardData;
 
-  const navigateTo = (hash: string) => {
-    window.location.hash = hash;
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, '', '/' + path);
+    window.dispatchEvent(new Event('popstate'));
   };
 
   return (

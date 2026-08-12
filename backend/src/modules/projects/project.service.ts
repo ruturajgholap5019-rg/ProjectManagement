@@ -361,18 +361,49 @@ export class ProjectService {
     const existing = await prisma.project.findUnique({ where: { id: projectId } });
     if (!existing) throw new AppError('Project not found', 404);
 
-    if (existing.status === 'CANCELLED') {
-      throw new AppError('Project is already cancelled.', 400);
-    }
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete task dependencies
+      const projectTasks = await tx.task.findMany({
+        where: { projectId },
+        select: { id: true },
+      });
+      const taskIds = projectTasks.map((t) => t.id);
 
-    await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        status: 'CANCELLED',
-        statusReason: 'Project cancelled by administrator.',
-      },
+      if (taskIds.length > 0) {
+        await tx.taskDependency.deleteMany({
+          where: {
+            OR: [{ taskId: { in: taskIds } }, { dependsOnId: { in: taskIds } }],
+          },
+        });
+      }
+
+      // 2. Delete comments & attachments linked to tasks or project
+      await tx.comment.deleteMany({
+        where: { OR: [{ projectId }, { taskId: { in: taskIds } }] },
+      });
+      await tx.attachment.deleteMany({
+        where: { OR: [{ projectId }, { taskId: { in: taskIds } }] },
+      });
+
+      // 3. Delete work activities linked to project
+      await tx.workActivity.deleteMany({ where: { projectId } });
+
+      // 4. Delete tasks & subtasks
+      await tx.task.deleteMany({ where: { projectId } });
+
+      // 5. Delete milestones
+      await tx.milestone.deleteMany({ where: { projectId } });
+
+      // 6. Delete project members
+      await tx.projectMember.deleteMany({ where: { projectId } });
+
+      // 7. Delete activity logs referencing project
+      await tx.activityLog.deleteMany({ where: { projectId } });
+
+      // 8. Hard delete project
+      await tx.project.delete({ where: { id: projectId } });
     });
 
-    return { message: 'Project cancelled successfully. Historical data preserved.' };
+    return { message: 'Project and all associated data permanently removed.' };
   }
 }

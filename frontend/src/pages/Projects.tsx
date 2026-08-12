@@ -4,9 +4,8 @@ import { useAuthStore } from '../store/authStore';
 import { useCategoryFilterStore } from '../store/categoryFilterStore';
 import { Button } from '../components/UI/Button';
 import { Input, Select, TextArea } from '../components/UI/Input';
-import { Modal } from '../components/UI/Modal';
 import { Badge } from '../components/UI/Badge';
-import { FolderPlus, Search, Users, CheckCircle2, User as UserIcon, Sparkles, Layers, X } from 'lucide-react';
+import { FolderPlus, Search, Users, CheckCircle2, User as UserIcon, Sparkles, Layers, X, ArrowLeft } from 'lucide-react';
 
 interface ProjectItem {
   id: string;
@@ -33,9 +32,10 @@ interface UserOption {
 
 interface ProjectsPageProps {
   onSelectProject?: (id: string) => void;
+  onToggleFullScreenForm?: (active: boolean) => void;
 }
 
-export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject }) => {
+export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onToggleFullScreenForm }) => {
   const user = useAuthStore((state) => state.user);
   const { selectedCategory } = useCategoryFilterStore();
 
@@ -44,7 +44,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject }) =
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Create Project Modal State
+  // Create Project Modal / Page View State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [scope, setScope] = useState('');
@@ -54,6 +54,16 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject }) =
   const [targetEndDate, setTargetEndDate] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [availableMembers, setAvailableMembers] = useState<UserOption[]>([]);
+
+  const openCreateForm = () => {
+    setIsCreateOpen(true);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(true);
+  };
+
+  const closeCreateForm = () => {
+    setIsCreateOpen(false);
+    if (onToggleFullScreenForm) onToggleFullScreenForm(false);
+  };
 
   const fetchProjects = async () => {
     setIsLoading(true);
@@ -106,10 +116,12 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject }) =
         }),
       });
 
-      setIsCreateOpen(false);
+      closeCreateForm();
       setName('');
       setScope('');
       setDescription('');
+      setLeadId('');
+      setTargetEndDate('');
       fetchProjects();
     } catch (err: any) {
       alert(err.message || 'Failed to create project');
@@ -145,8 +157,140 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject }) =
         return false;
       }
     }
+    if (search.trim()) {
+      const q = search.toLowerCase().trim();
+      const matchesName = p.name.toLowerCase().includes(q);
+      const matchesScope = p.scope?.toLowerCase().includes(q);
+      const matchesLead = p.lead ? `${p.lead.firstName} ${p.lead.lastName}`.toLowerCase().includes(q) : false;
+      if (!matchesName && !matchesScope && !matchesLead) return false;
+    }
     return true;
   });
+
+  // Dedicated Page view for Creating & Assigning New Project
+  if (isCreateOpen) {
+    return (
+      <div className="animate-fade-in" style={{ padding: '36px 0', width: '90%', maxWidth: '1200px', margin: '0 auto' }}>
+        <button
+          type="button"
+          onClick={closeCreateForm}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '0.9rem',
+            fontWeight: 700,
+            marginBottom: '24px',
+          }}
+        >
+          <ArrowLeft size={18} /> Back to Projects Directory
+        </button>
+
+        <div className="glass-card" style={{ padding: '36px' }}>
+          <div style={{ marginBottom: '24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '18px' }}>
+            <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '6px', letterSpacing: '-0.02em' }}>
+              Create & Assign <span className="text-gradient">New Project</span>
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              Fill in project deliverables, target deadlines, and directly assign a lead team member.
+            </p>
+          </div>
+
+          <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <Input
+                label="Project Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Mobile Application Overhaul"
+                required
+              />
+              <Select
+                label="Project Type / Category"
+                value={projectType}
+                onChange={(e) => setProjectType(e.target.value)}
+                options={[
+                  { value: 'WEBSITE_WEBAPP', label: 'Website / Web Application' },
+                  { value: 'MOBILE_APP', label: 'Mobile Application' },
+                  { value: 'BMS', label: 'Building / Enterprise Management System (BMS)' },
+                  { value: 'UNIVERSITY_NEP', label: 'University / NEP Platform' },
+                  { value: 'DESIGN_SOCIAL_MEDIA', label: 'Design & Social Media Campaign' },
+                  { value: 'PODCAST_MEDIA', label: 'Podcast & Media Production' },
+                  { value: 'RESEARCH', label: 'Digital Research' },
+                  { value: 'OTHER', label: 'Other Project' },
+                ]}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <Select
+                label="Assign Team Member (Optional)"
+                value={leadId}
+                onChange={(e) => setLeadId(e.target.value)}
+                options={[
+                  { value: '', label: 'None (Unassigned - Assign Later)' },
+                  ...availableMembers.map((u) => ({
+                    value: u.id,
+                    label: `${u.firstName} ${u.lastName} (${u.role})`,
+                  })),
+                ]}
+              />
+              <Select
+                label="Priority Level"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                options={[
+                  { value: 'LOW', label: 'Low' },
+                  { value: 'MEDIUM', label: 'Medium' },
+                  { value: 'HIGH', label: 'High' },
+                  { value: 'CRITICAL', label: 'Critical' },
+                ]}
+              />
+            </div>
+
+            <Input
+              label="Project Target Deadline (Optional)"
+              type="date"
+              value={targetEndDate}
+              onChange={(e) => setTargetEndDate(e.target.value)}
+              helperText="Optional target deadline. If overdue, status automatically switches to AT_RISK."
+            />
+
+            <TextArea
+              label="Project Scope & Key Deliverables"
+              placeholder="Detailed scope of deliverables included in this project..."
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              required
+              rows={4}
+            />
+
+            <TextArea
+              label="Additional Notes / Description (Optional)"
+              placeholder="Optional notes or background information..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+            />
+
+            <div style={{ display: 'flex', gap: '14px', marginTop: '12px' }}>
+              <Button variant="gradient" type="submit" style={{ flex: 1, padding: '12px' }}>
+                <FolderPlus size={18} style={{ marginRight: '8px' }} />
+                Create & Register Project
+              </Button>
+              <Button variant="secondary" type="button" onClick={closeCreateForm} style={{ padding: '12px 24px' }}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '1280px', margin: '0 auto' }}>
@@ -161,7 +305,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject }) =
           </p>
         </div>
         {user?.role === 'ADMIN' && (
-          <Button variant="gradient" onClick={() => setIsCreateOpen(true)}>
+          <Button variant="gradient" onClick={openCreateForm}>
             <FolderPlus size={18} />
             Create & Assign Project
           </Button>
@@ -399,62 +543,6 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject }) =
         </div>
       )}
 
-      {/* Create Project Modal */}
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Create & Assign New Project">
-        <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Input label="Project Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mobile Application Overhaul" required />
-          <TextArea label="Project Scope & Deliverables" placeholder="Detailed scope of deliverables included in this project..." value={scope} onChange={(e) => setScope(e.target.value)} required />
-          <TextArea label="Description" placeholder="Optional notes or background information..." value={description} onChange={(e) => setDescription(e.target.value)} />
-          <Select
-            label="Project Type"
-            value={projectType}
-            onChange={(e) => setProjectType(e.target.value)}
-            options={[
-              { value: 'WEBSITE_WEBAPP', label: 'Website / Web Application' },
-              { value: 'MOBILE_APP', label: 'Mobile Application' },
-              { value: 'BMS', label: 'Building / Enterprise Management System (BMS)' },
-              { value: 'UNIVERSITY_NEP', label: 'University / NEP Platform' },
-              { value: 'DESIGN_SOCIAL_MEDIA', label: 'Design & Social Media Campaign' },
-              { value: 'PODCAST_MEDIA', label: 'Podcast & Media Production' },
-              { value: 'RESEARCH', label: 'Digital Research' },
-              { value: 'OTHER', label: 'Other Project' },
-            ]}
-          />
-          <Select
-            label="Directly Assign Team Member (Student)"
-            value={leadId}
-            onChange={(e) => setLeadId(e.target.value)}
-            options={[
-              { value: '', label: 'Select Student to Assign...' },
-              ...availableMembers.map((u) => ({
-                value: u.id,
-                label: `${u.firstName} ${u.lastName} (${u.role})`,
-              })),
-            ]}
-          />
-          <Input
-            label="Project Target Deadline (Optional)"
-            type="date"
-            value={targetEndDate}
-            onChange={(e) => setTargetEndDate(e.target.value)}
-            helperText="If the target deadline passes without completion, the project automatically switches to AT_RISK and sends email notifications."
-          />
-          <Select
-            label="Priority"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            options={[
-              { value: 'LOW', label: 'Low' },
-              { value: 'MEDIUM', label: 'Medium' },
-              { value: 'HIGH', label: 'High' },
-              { value: 'CRITICAL', label: 'Critical' },
-            ]}
-          />
-          <Button variant="gradient" type="submit" style={{ marginTop: '8px' }}>
-            Create & Notify Assigned Student
-          </Button>
-        </form>
-      </Modal>
     </div>
   );
 };
