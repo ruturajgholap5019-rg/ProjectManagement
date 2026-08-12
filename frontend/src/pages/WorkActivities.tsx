@@ -113,6 +113,27 @@ export const WorkActivitiesPage: React.FC = () => {
     }
   };
 
+  const handleExportExcel = async () => {
+    try {
+      const token = useAuthStore.getState().accessToken;
+      const res = await fetch('/api/v1/reports/export/excel', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Export failed: ' + res.statusText);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `VSS_Tracker_Report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Failed to export Excel report: ' + err.message);
+    }
+  };
+
   const handleLogActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -160,13 +181,26 @@ export const WorkActivitiesPage: React.FC = () => {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <Button variant="gradient" onClick={() => setIsLogModalOpen(true)}>
             <Plus size={18} /> Log Work Activity
           </Button>
           <Button variant="secondary" onClick={handleExportCSV}>
-            <Download size={18} /> Export Report (CSV)
+            <Download size={18} /> Export Activity (CSV)
           </Button>
+          {user?.role === 'ADMIN' && (
+            <Button
+              variant="secondary"
+              onClick={handleExportExcel}
+              style={{
+                background: 'linear-gradient(135deg, #1D6F42, #217346)',
+                color: '#fff',
+                border: 'none',
+              }}
+            >
+              <Download size={18} /> Export Full Report (Excel)
+            </Button>
+          )}
         </div>
       </div>
 

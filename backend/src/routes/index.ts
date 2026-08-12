@@ -12,6 +12,7 @@ import notificationRouter from '../modules/notifications/notification.routes.js'
 import { authenticate } from '../middlewares/auth.middleware.js';
 import { requireRoles } from '../middlewares/rbac.middleware.js';
 import { UserRole } from '../types/enums.js';
+import reportRouter from '../modules/reports/report.routes.js';
 
 const router = Router();
 
@@ -75,5 +76,10 @@ router.use('/activities', activityRouter);
 router.use('/search', searchRouter);
 router.use('/skills', skillRouter);
 router.use('/', notificationRouter);
+
+// ----------------------------------------------------------------------------
+// REPORTS ROUTES (/api/v1/reports)
+// ----------------------------------------------------------------------------
+router.use('/reports', reportRouter);
 
 export default router;
