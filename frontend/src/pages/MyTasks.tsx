@@ -52,7 +52,7 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('ALL');
-  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
 
   // Edit Task Modal State (For Admin & Project Lead & Assignee)
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
@@ -92,8 +92,8 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
     fetchMyTasks();
   }, []);
 
-  const toggleProjectCollapse = (projectId: string) => {
-    setCollapsedProjects((prev) => ({
+  const toggleProjectExpansion = (projectId: string) => {
+    setExpandedProjects((prev) => ({
       ...prev,
       [projectId]: !prev[projectId],
     }));
@@ -326,7 +326,13 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             type="button"
-            onClick={() => setCollapsedProjects({})}
+            onClick={() => {
+              const allExp: Record<string, boolean> = {};
+              projectGroups.forEach((g) => {
+                allExp[g.project.id] = true;
+              });
+              setExpandedProjects(allExp);
+            }}
             style={{
               padding: '6px 12px',
               borderRadius: 'var(--radius-md)',
@@ -338,7 +344,23 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
               cursor: 'pointer',
             }}
           >
-            Expand All Projects
+            Expand All
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpandedProjects({})}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)',
+              backgroundColor: 'var(--bg-card)',
+              color: 'var(--text-secondary)',
+              fontSize: '0.80rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Collapse All
           </button>
         </div>
       </div>
@@ -360,14 +382,14 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {projectGroups.map(({ project, tasks: projTasks }) => {
-            const isExpanded = collapsedProjects[project.id] !== true;
+            const isExpanded = Boolean(expandedProjects[project.id]);
             const projCompletedCount = projTasks.filter((t) => t.status === 'COMPLETED').length;
 
             return (
               <div key={project.id} className="glass-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
                 {/* Project Header Bar - Click to Expand / Collapse */}
                 <div
-                  onClick={() => toggleProjectCollapse(project.id)}
+                  onClick={() => toggleProjectExpansion(project.id)}
                   style={{
                     padding: '20px 24px',
                     display: 'flex',

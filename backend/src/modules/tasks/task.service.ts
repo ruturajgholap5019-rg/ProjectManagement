@@ -363,4 +363,32 @@ export class TaskService {
 
     return await dfs(targetTaskId);
   }
+
+  static async deleteTask(taskId: string, user: { id: string; role: UserRole }) {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      include: { project: true },
+    });
+    if (!task) throw new AppError('Task not found', 404);
+
+    const isLead = task.project.leadId === user.id;
+    const isAdmin = user.role === UserRole.ADMIN;
+    const isAssignee = task.assigneeId === user.id;
+
+    if (!isLead && !isAdmin && !isAssignee) {
+      throw new AppError('Only the assigned member, Project Lead, or Administrator can delete project tasks.', 403);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Delete dependencies, comments, activity logs, and task
+      await tx.taskDependency.deleteMany({
+        where: { OR: [{ taskId }, { dependsOnId: taskId }] },
+      });
+      await tx.comment.deleteMany({ where: { taskId } });
+      await tx.activityLog.deleteMany({ where: { taskId } });
+      await tx.task.delete({ where: { id: taskId } });
+    });
+
+    return { message: 'Task deleted successfully' };
+  }
 }

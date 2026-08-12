@@ -1,57 +1,98 @@
 import 'dotenv/config';
+import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 
 class EmailService {
   private resend: Resend | null = null;
+  private nodemailerTransporter: nodemailer.Transporter | null = null;
 
   constructor() {
-    this.initResend();
+    this.initClients();
   }
 
-  private initResend() {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (apiKey) {
-      this.resend = new Resend(apiKey);
+  private initClients() {
+    // 1. Check Nodemailer / SMTP config
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+
+    if (smtpHost && smtpUser && smtpPass) {
+      const port = Number(process.env.SMTP_PORT) || 587;
+      const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+
+      this.nodemailerTransporter = nodemailer.createTransport({
+        host: smtpHost,
+        port,
+        secure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      });
+      console.log(`📧 [EMAIL SERVICE] Configured Nodemailer SMTP client (${smtpHost}:${port})`);
+    }
+
+    // 2. Check Resend API config
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (resendApiKey) {
+      this.resend = new Resend(resendApiKey);
       console.log(`📧 [EMAIL SERVICE] Configured Resend Email API client`);
-    } else {
-      this.resend = null;
-      console.log(`📧 [EMAIL SERVICE] Resend Mode: Set RESEND_API_KEY in backend/.env to deliver live emails.`);
     }
   }
 
   async sendEmail(to: string, subject: string, html: string) {
-    const from = process.env.EMAIL_FROM || 'Project Tracker <onboarding@resend.dev>';
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'Project Tracker <onboarding@resend.dev>';
 
-    // Dynamically check process.env.RESEND_API_KEY
-    if (!this.resend && process.env.RESEND_API_KEY) {
-      this.resend = new Resend(process.env.RESEND_API_KEY);
-    }
-
-    if (this.resend) {
+    // 1. Try Nodemailer SMTP first if configured
+    if (this.nodemailerTransporter) {
       try {
-        const { data, error } = await this.resend.emails.send({
+        const info = await this.nodemailerTransporter.sendMail({
           from,
           to,
           subject,
           html,
         });
-
-        if (error) {
-          console.warn(`⚠️ [RESEND NOTICE] Could not deliver via Resend API (${error.message}). Falling back to local logger.`);
-        } else {
-          console.log(`\n✅ 📧 [RESEND LIVE EMAIL DISPATCHED]`);
-          console.log(`   Resend Email ID: ${data?.id}`);
-          console.log(`   To: ${to}`);
-          console.log(`   Subject: ${subject}\n`);
-          return data;
-        }
-      } catch (err: any) {
-        console.warn(`⚠️ [RESEND EXCEPTION] ${err.message}. Falling back to local logger.`);
+        console.log(`\n✅ 📧 [LIVE SMTP EMAIL DISPATCHED VIA NODEMAILER]`);
+        console.log(`   Message ID: ${info.messageId}`);
+        console.log(`   To: ${to}`);
+        console.log(`   Subject: ${subject}\n`);
+        return info;
+      } catch (smtpErr: any) {
+        console.warn(`⚠️ [NODEMAILER SMTP NOTICE] Failed to deliver email (${smtpErr.message}). Trying fallback.`);
       }
     }
 
-    // Console logging fallback
-    console.log(`\n📧 [EMAIL SERVICE LOCAL DISPATCH LOG]`);
+    // 2. Try Resend API if configured
+    if (this.resend || process.env.RESEND_API_KEY) {
+      if (!this.resend && process.env.RESEND_API_KEY) {
+        this.resend = new Resend(process.env.RESEND_API_KEY);
+      }
+      if (this.resend) {
+        try {
+          const { data, error } = await this.resend.emails.send({
+            from,
+            to,
+            subject,
+            html,
+          });
+          if (!error) {
+            console.log(`\n✅ 📧 [RESEND LIVE EMAIL DISPATCHED]`);
+            console.log(`   Resend Email ID: ${data?.id}`);
+            console.log(`   To: ${to}`);
+            console.log(`   Subject: ${subject}\n`);
+            return data;
+          } else {
+            console.warn(`⚠️ [RESEND NOTICE] Could not deliver via Resend (${error.message}).`);
+          }
+        } catch (resendErr: any) {
+          console.warn(`⚠️ [RESEND EXCEPTION] ${resendErr.message}`);
+        }
+      }
+    }
+
+    // 3. Fallback console logger
+    console.log(`\n📧 [EMAIL SERVICE DISPATCH LOG]`);
+    console.log(`   From: ${from}`);
     console.log(`   To: ${to}`);
     console.log(`   Subject: ${subject}`);
     console.log(`   --------------------------------------------------`);

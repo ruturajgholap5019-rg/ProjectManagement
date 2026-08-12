@@ -21,6 +21,7 @@ router.use(authenticate);
 router.get('/tasks/my-tasks', TaskController.getMyTasks);
 router.get('/tasks/:id', TaskController.getTask);
 router.put('/tasks/:id', validateRequest(updateTaskSchema), TaskController.updateTask);
+router.delete('/tasks/:id', TaskController.deleteTask);
 router.patch('/tasks/:id/status', validateRequest(updateTaskStatusSchema), TaskController.updateStatus);
 router.post('/tasks/:id/dependencies', validateRequest(addDependencySchema), TaskController.addDependency);
 router.delete('/tasks/:id/dependencies/:depId', TaskController.removeDependency);

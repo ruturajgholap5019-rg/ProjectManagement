@@ -7,7 +7,7 @@ import { Modal } from '../components/UI/Modal';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { Badge } from '../components/UI/Badge';
 import { generateProjectPdfReport } from '../utils/pdfReportGenerator';
-import { ArrowLeft, CheckCircle2, UserPlus, UserX, AlertTriangle, Plus, MessageSquare, Paperclip, Download, Sparkles, FileText } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, UserPlus, UserX, AlertTriangle, Plus, MessageSquare, Paperclip, Download, Sparkles, FileText, Trash2 } from 'lucide-react';
 
 interface ProjectDetailProps {
   projectId: string;
@@ -89,8 +89,15 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDesc, setTaskDesc] = useState('');
   const [taskAssignee, setTaskAssignee] = useState('');
+  const [taskAssignees, setTaskAssignees] = useState<string[]>([]);
   const [taskMilestone, setTaskMilestone] = useState('');
   const [taskPriority, setTaskPriority] = useState('MEDIUM');
+
+  const toggleTaskAssignee = (userId: string) => {
+    setTaskAssignees((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
 
   // New Comment
   const [newComment, setNewComment] = useState('');
@@ -275,7 +282,8 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
         body: JSON.stringify({
           title: taskTitle,
           description: taskDesc,
-          assigneeId: taskAssignee || undefined,
+          assigneeId: taskAssignees[0] || taskAssignee || undefined,
+          assigneeIds: taskAssignees,
           milestoneId: taskMilestone || undefined,
           priority: taskPriority,
         }),
@@ -283,9 +291,31 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       setIsTaskOpen(false);
       setTaskTitle('');
       setTaskDesc('');
+      setTaskAssignee('');
+      setTaskAssignees([]);
       fetchProjectDetails();
     } catch (err: any) {
       alert(err.message || 'Failed to create task');
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) return;
+    try {
+      await apiFetch(`/tasks/${taskId}`, { method: 'DELETE' });
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete task');
+    }
+  };
+
+  const handleDeleteMilestone = async (msId: string) => {
+    if (!window.confirm('Are you sure you want to delete this milestone? Associated tasks will be unlinked.')) return;
+    try {
+      await apiFetch(`/milestones/${msId}`, { method: 'DELETE' });
+      fetchProjectDetails();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete milestone');
     }
   };
 
@@ -584,8 +614,20 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
               {milestones.map((ms) => (
                 <div key={ms.id} className="glass-card hover-lift" style={{ padding: '20px' }}>
-                  <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1rem' }}>{ms.name}</div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1rem' }}>{ms.name}</div>
+                    {isLeadOrAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMilestone(ms.id)}
+                        title="Delete Milestone"
+                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '2px', borderRadius: 'var(--radius-sm)' }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '6px' }}>
                     {ms.completedTasks} of {ms.totalTasks} tasks completed
                   </div>
                 </div>
@@ -638,8 +680,8 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
                         )}
                       </div>
 
-                      {/* Interactive Task Status Selector Dropdown */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {/* Interactive Task Status Selector Dropdown & Delete Button */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <select
                           value={t.status}
                           onChange={(e) => handleTaskStatusChange(t.id, e.target.value)}
@@ -661,6 +703,27 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
                           <option value="REVIEW">Under Review</option>
                           <option value="COMPLETED">Completed</option>
                         </select>
+
+                        {isLeadOrAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTask(t.id)}
+                            title="Delete Task"
+                            style={{
+                              backgroundColor: 'var(--danger-light)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              color: 'var(--danger)',
+                              padding: '6px 10px',
+                              borderRadius: 'var(--radius-md)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -890,22 +953,48 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
         <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Input label="Task Title" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="e.g. Implement User Role Auth Middleware" required />
           <TextArea label="Task Description" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} placeholder="Technical requirements, acceptance criteria..." />
-          <Select
-            label="Assignee"
-            value={taskAssignee}
-            onChange={(e) => setTaskAssignee(e.target.value)}
-            options={[
-              { value: '', label: 'Unassigned' },
-              ...members.map((m) => {
-                const u = m.user || m;
-                const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Member';
-                return {
-                  value: m.userId || m.id,
-                  label: name,
-                };
-              }),
-            ]}
-          />
+          <div>
+            <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+              Assign Team Member(s) (One or More)
+            </label>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '10px 12px', borderRadius: 'var(--radius-md)', maxHeight: '140px', overflowY: 'auto' }}>
+              {members.length === 0 ? (
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>No team members assigned to project yet</span>
+              ) : (
+                members.map((m) => {
+                  const u = m.user || m;
+                  const uId = m.userId || u.id || m.id;
+                  const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Member';
+                  const isSelected = taskAssignees.includes(uId);
+
+                  return (
+                    <button
+                      key={uId}
+                      type="button"
+                      onClick={() => toggleTaskAssignee(uId)}
+                      style={{
+                        backgroundColor: isSelected ? 'var(--primary-light)' : 'var(--bg-card)',
+                        border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                        color: isSelected ? 'var(--primary)' : 'var(--text-primary)',
+                        padding: '4px 12px',
+                        borderRadius: 'var(--radius-full)',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <span>{isSelected ? '✓' : '+'}</span>
+                      <span>{name}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
           <Select
             label="Milestone (Optional)"
             value={taskMilestone}

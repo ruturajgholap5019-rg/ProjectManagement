@@ -112,4 +112,14 @@ export class TaskController {
       next(error);
     }
   }
+
+  static async deleteTask(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) throw new AppError('Unauthorized', 401);
+      const result = await TaskService.deleteTask(req.params.id, req.user);
+      sendSuccess(res, result, 'Task deleted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
