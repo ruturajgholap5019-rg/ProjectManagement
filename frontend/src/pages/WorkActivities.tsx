@@ -6,7 +6,8 @@ import { useAuthStore } from '../store/authStore';
 import { Button } from '../components/UI/Button';
 import { Input, Select, TextArea } from '../components/UI/Input';
 import { Modal } from '../components/UI/Modal';
-import { Download, Plus, Search, Clock, Sparkles, FileText, ArrowUpRight } from 'lucide-react';
+import { ConfirmModal } from '../components/UI/ConfirmModal';
+import { Download, Plus, Search, Clock, Sparkles, FileText, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
 
 interface WorkActivityItem {
   id: string;
@@ -39,6 +40,65 @@ export const WorkActivitiesPage: React.FC = () => {
   const [logHours, setLogHours] = useState('2.0');
   const [projectsList, setProjectsList] = useState<any[]>([]);
   const [membersList, setMembersList] = useState<any[]>([]);
+
+  // Edit Activity Modal
+  const [editingActivity, setEditingActivity] = useState<WorkActivityItem | null>(null);
+  const [editDescription, setEditDescription] = useState('');
+  const [editHours, setEditHours] = useState('2.0');
+  const [editProjectId, setEditProjectId] = useState('');
+  const [editMemberId, setEditMemberId] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Delete Confirm Modal
+  const [deletingActivityId, setDeletingActivityId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const openEditModal = (activity: WorkActivityItem) => {
+    setEditingActivity(activity);
+    setEditDescription(activity.workDescription || '');
+    setEditHours(String(activity.hoursSpent || 1.0));
+    setEditProjectId(activity.project?.id || '');
+    setEditMemberId(activity.user?.id || '');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingActivity) return;
+    setIsSavingEdit(true);
+    try {
+      await apiFetch(`/activities/${editingActivity.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          workDescription: editDescription.trim(),
+          hoursSpent: Number(editHours),
+          projectId: editProjectId || undefined,
+          userId: user?.role === 'ADMIN' ? editMemberId : undefined,
+        }),
+      });
+      setEditingActivity(null);
+      fetchActivities();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update work activity log');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingActivityId) return;
+    setIsDeleting(true);
+    try {
+      await apiFetch(`/activities/${deletingActivityId}`, {
+        method: 'DELETE',
+      });
+      setDeletingActivityId(null);
+      fetchActivities();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete work activity log');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const fetchActivities = async () => {
     setIsLoading(true);
@@ -234,48 +294,66 @@ export const WorkActivitiesPage: React.FC = () => {
                   <th style={{ padding: '14px 16px', minWidth: '320px' }}>Work Description</th>
                   <th style={{ padding: '14px 16px', minWidth: '130px', textAlign: 'center' }}>Hours Spent</th>
                   <th style={{ padding: '14px 16px', minWidth: '160px' }}>Assigned By</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'right', minWidth: '110px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredActivities.map((a) => (
-                  <tr key={a.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s ease' }}>
-                    <td style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 800 }}>#{a.serialNo}</td>
-                    <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>
-                      {new Date(a.dateTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                    </td>
-                    <td
-                      style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
-                      onClick={() => {
-                        window.history.pushState({}, '', `/students/${a.user.id}`);
-                        window.dispatchEvent(new Event('popstate'));
-                      }}
-                    >
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        {a.user.firstName} {a.user.lastName} <ArrowUpRight size={13} color="var(--text-muted)" />
-                      </span>
-                    </td>
-                    <td
-                      style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
-                      onClick={() => {
-                        window.history.pushState({}, '', `/projects/${a.project.id}`);
-                        window.dispatchEvent(new Event('popstate'));
-                      }}
-                    >
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        {a.project.name} <ArrowUpRight size={13} color="var(--text-muted)" />
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                      {a.workDescription}
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: 'var(--text-primary)' }}>
-                      {a.hoursSpent} hrs
-                    </td>
-                    <td style={{ padding: '14px 16px', color: 'var(--text-muted)' }}>
-                      {a.assignedBy ? `${a.assignedBy.firstName} ${a.assignedBy.lastName}` : 'Admin'}
-                    </td>
-                  </tr>
-                ))}
+                {filteredActivities.map((a) => {
+                  const canManage = user?.role === 'ADMIN' || a.user.id === user?.id;
+                  return (
+                    <tr key={a.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s ease' }}>
+                      <td style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 800 }}>#{a.serialNo}</td>
+                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>
+                        {new Date(a.dateTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      </td>
+                      <td
+                        style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
+                        onClick={() => {
+                          window.history.pushState({}, '', `/students/${a.user.id}`);
+                          window.dispatchEvent(new Event('popstate'));
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          {a.user.firstName} {a.user.lastName} <ArrowUpRight size={13} color="var(--text-muted)" />
+                        </span>
+                      </td>
+                      <td
+                        style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
+                        onClick={() => {
+                          window.history.pushState({}, '', `/projects/${a.project.id}`);
+                          window.dispatchEvent(new Event('popstate'));
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          {a.project.name} <ArrowUpRight size={13} color="var(--text-muted)" />
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                        {a.workDescription}
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {a.hoursSpent} hrs
+                      </td>
+                      <td style={{ padding: '14px 16px', color: 'var(--text-muted)' }}>
+                        {a.assignedBy ? `${a.assignedBy.firstName} ${a.assignedBy.lastName}` : 'Admin'}
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        {canManage ? (
+                          <div style={{ display: 'inline-flex', gap: '6px' }}>
+                            <Button size="sm" variant="secondary" onClick={() => openEditModal(a)} title="Edit Activity Log">
+                              <Edit2 size={14} />
+                            </Button>
+                            <Button size="sm" variant="danger" onClick={() => setDeletingActivityId(a.id)} title="Delete Activity Log">
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>View Only</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -339,6 +417,74 @@ export const WorkActivitiesPage: React.FC = () => {
           </Button>
         </form>
       </Modal>
+
+      {/* Edit Activity Modal */}
+      <Modal isOpen={Boolean(editingActivity)} onClose={() => setEditingActivity(null)} title="Edit Work Activity Log">
+        <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {user?.role === 'ADMIN' && (
+            <Select
+              label="Team Member"
+              value={editMemberId}
+              onChange={(e) => setEditMemberId(e.target.value)}
+              options={membersList.map((m) => ({
+                value: m.id,
+                label: `${m.firstName} ${m.lastName} (${m.role})`,
+              }))}
+              required
+            />
+          )}
+
+          <Select
+            label="Project"
+            value={editProjectId}
+            onChange={(e) => setEditProjectId(e.target.value)}
+            options={projectsList.map((p) => ({
+              value: p.id,
+              label: p.name,
+            }))}
+            required
+          />
+
+          <TextArea
+            label="Work Description"
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            required
+          />
+
+          <Input
+            label="Hours Spent"
+            type="number"
+            step="0.5"
+            min="0.5"
+            max="24"
+            value={editHours}
+            onChange={(e) => setEditHours(e.target.value)}
+            required
+          />
+
+          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <Button variant="gradient" type="submit" isLoading={isSavingEdit} disabled={isSavingEdit} style={{ flex: 1 }}>
+              Save Changes
+            </Button>
+            <Button variant="secondary" type="button" onClick={() => setEditingActivity(null)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Confirm Delete Activity Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingActivityId)}
+        onClose={() => setDeletingActivityId(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Work Activity Log"
+        message="Are you sure you want to delete this work activity log entry? The logged hours will be deducted from activity totals."
+        confirmText="Delete Activity Log"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

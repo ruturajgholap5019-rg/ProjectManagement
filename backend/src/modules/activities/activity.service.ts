@@ -128,4 +128,50 @@ export class ActivityService {
 
     return csv;
   }
+
+  static async updateActivity(
+    id: string,
+    input: { workDescription?: string; hoursSpent?: number; projectId?: string; dateTime?: string; userId?: string },
+    currentUser: { id: string; role: string }
+  ) {
+    const activity = await prisma.workActivity.findUnique({ where: { id } });
+    if (!activity) throw new AppError('Work activity log not found', 404);
+
+    if (currentUser.role !== 'ADMIN' && activity.userId !== currentUser.id) {
+      throw new AppError('You do not have permission to edit this work activity log', 403);
+    }
+
+    if (input.projectId) {
+      const project = await prisma.project.findUnique({ where: { id: input.projectId } });
+      if (!project) throw new AppError('Project not found', 404);
+    }
+
+    return prisma.workActivity.update({
+      where: { id },
+      data: {
+        ...(input.workDescription !== undefined && { workDescription: input.workDescription.trim() }),
+        ...(input.hoursSpent !== undefined && { hoursSpent: Number(input.hoursSpent) || 1.0 }),
+        ...(input.projectId !== undefined && { projectId: input.projectId }),
+        ...(input.userId !== undefined && currentUser.role === 'ADMIN' && { userId: input.userId }),
+        ...(input.dateTime !== undefined && { dateTime: new Date(input.dateTime) }),
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        project: { select: { id: true, name: true, projectType: true, status: true } },
+        assignedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  static async deleteActivity(id: string, currentUser: { id: string; role: string }) {
+    const activity = await prisma.workActivity.findUnique({ where: { id } });
+    if (!activity) throw new AppError('Work activity log not found', 404);
+
+    if (currentUser.role !== 'ADMIN' && activity.userId !== currentUser.id) {
+      throw new AppError('You do not have permission to delete this work activity log', 403);
+    }
+
+    await prisma.workActivity.delete({ where: { id } });
+    return { success: true, message: 'Work activity log deleted successfully' };
+  }
 }

@@ -175,8 +175,16 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     attachments: true,
   });
 
-  const handleGeneratePdf = (e: React.FormEvent) => {
+  const handleGeneratePdf = async (e: React.FormEvent) => {
     e.preventDefault();
+    let activitiesData: any[] = [];
+    try {
+      const res = await apiFetch<any>(`/activities?projectId=${projectId}`);
+      activitiesData = res.activities || [];
+    } catch {
+      // Ignore
+    }
+
     generateProjectPdfReport({
       project,
       members,
@@ -184,6 +192,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       tasks,
       comments,
       attachments,
+      activities: activitiesData,
       timeRange: pdfTimeRange,
       startDate: pdfStartDate,
       endDate: pdfEndDate,

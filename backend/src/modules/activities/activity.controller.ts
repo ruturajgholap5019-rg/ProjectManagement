@@ -53,4 +53,32 @@ export class ActivityController {
       next(error);
     }
   }
+
+  static async updateActivity(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const updated = await ActivityService.updateActivity(
+        req.params.id,
+        {
+          workDescription: req.body.workDescription,
+          hoursSpent: req.body.hoursSpent,
+          projectId: req.body.projectId,
+          userId: req.body.userId,
+          dateTime: req.body.dateTime,
+        },
+        req.user!
+      );
+      sendSuccess(res, updated, 'Work activity log updated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteActivity(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await ActivityService.deleteActivity(req.params.id, req.user!);
+      sendSuccess(res, result, 'Work activity log deleted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
 }

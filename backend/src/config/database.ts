@@ -6,6 +6,7 @@ declare global {
   var prismaGlobal: PrismaClient | undefined;
 }
 
+// Shared Prisma Client Instance
 export const prisma =
   globalThis.prismaGlobal ??
   new PrismaClient({

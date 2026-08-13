@@ -5,6 +5,7 @@ export interface PdfReportOptions {
   tasks: any[];
   comments: any[];
   attachments: any[];
+  activities?: any[];
   timeRange: string;
   startDate?: string;
   endDate?: string;
@@ -15,6 +16,7 @@ export interface PdfReportOptions {
     tasks: boolean;
     comments: boolean;
     attachments: boolean;
+    activities?: boolean;
   };
 }
 
@@ -25,6 +27,7 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
     tasks,
     comments,
     attachments,
+    activities = [],
     timeRange,
     startDate,
     endDate,
@@ -35,6 +38,7 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
   let filteredTasks = [...tasks];
   let filteredComments = [...comments];
   let filteredAttachments = [...attachments];
+  let filteredActivities = [...activities];
 
   const now = new Date();
   let cutOffDate: Date | null = null;
@@ -66,6 +70,7 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
     filteredTasks = filteredTasks.filter((t) => new Date(t.createdAt || t.dueDate || Date.now()) >= cutOffDate!);
     filteredComments = filteredComments.filter((c) => new Date(c.createdAt) >= cutOffDate!);
     filteredAttachments = filteredAttachments.filter((a) => new Date(a.createdAt) >= cutOffDate!);
+    filteredActivities = filteredActivities.filter((act) => new Date(act.dateTime || act.createdAt) >= cutOffDate!);
   } else if (timeRange === 'CUSTOM' && startDate && endDate) {
     const s = new Date(startDate);
     const e = new Date(endDate);
@@ -82,6 +87,10 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
       const d = new Date(a.createdAt);
       return d >= s && d <= e;
     });
+    filteredActivities = filteredActivities.filter((act) => {
+      const d = new Date(act.dateTime || act.createdAt);
+      return d >= s && d <= e;
+    });
   }
 
   if (statusFilter === 'COMPLETED_ONLY') {
@@ -95,10 +104,19 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
   const todoCount = filteredTasks.filter((t) => t.status === 'TODO').length;
   const totalCount = filteredTasks.length;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const totalHoursLogged = filteredActivities.reduce((sum, act) => sum + (Number(act.hoursSpent) || 0), 0);
 
   const leadName = project.lead
     ? `${project.lead.firstName} ${project.lead.lastName} (${project.lead.email})`
-    : 'Not Assigned';
+    : 'Unassigned';
+
+  const supervisorName = project.creator
+    ? `${project.creator.firstName} ${project.creator.lastName} (${project.creator.role})`
+    : 'System Admin';
+
+  const clientName = project.client?.name || 'Internal Project (No External Client)';
+  const clientContact = [project.client?.phone && `📞 ${project.client.phone}`, project.client?.email && `✉️ ${project.client.email}`].filter(Boolean).join(' | ');
+  const referencePerson = project.referencePerson || project.client?.referencePerson || 'Not Specified';
 
   // Group tasks by Module / Milestone Group
   const tasksByModule = new Map<string, any[]>();
@@ -119,48 +137,64 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
         <style>
           @page {
             size: A4 portrait;
-            margin: 12mm 14mm;
+            margin: 10mm 12mm;
           }
           body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
             color: #0f172a;
             background-color: #ffffff;
             margin: 0;
-            padding: 0;
-            font-size: 12px;
+            padding: 20px;
+            font-size: 11px;
             line-height: 1.5;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
 
-          .section-block {
-            page-break-inside: avoid;
-            break-inside: avoid;
-            margin-bottom: 22px;
+          .brand-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #4f46e5;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+          }
+          .brand-name {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #4f46e5;
+            letter-spacing: -0.02em;
+          }
+          .report-type {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
           }
 
           .header-banner {
-            background: linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%);
+            background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #4338ca 100%);
             color: #ffffff;
-            padding: 22px 26px;
-            border-radius: 8px;
+            padding: 20px 24px;
+            border-radius: 10px;
             margin-bottom: 20px;
-            page-break-after: avoid;
+            box-shadow: 0 4px 12px rgba(67, 56, 202, 0.15);
           }
           .header-banner h1 {
             margin: 0 0 6px 0;
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 800;
             letter-spacing: -0.02em;
           }
           .header-banner p {
             margin: 0;
             opacity: 0.9;
-            font-size: 12px;
+            font-size: 11px;
           }
           .badge {
             display: inline-block;
-            padding: 4px 9px;
+            padding: 4px 10px;
             border-radius: 20px;
             font-size: 10px;
             font-weight: 700;
@@ -172,6 +206,32 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
           .badge-warning { background-color: #fef3c7; color: #92400e; }
           .badge-danger { background-color: #fee2e2; color: #991b1b; }
           
+          .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+          }
+          .stat-card {
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 12px 14px;
+            text-align: center;
+          }
+          .stat-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #4338ca;
+          }
+          .stat-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-top: 3px;
+          }
+
           .grid-2 {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -182,18 +242,29 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
           .meta-box {
             background-color: #f8fafc;
             border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            padding: 12px 16px;
+            border-radius: 8px;
+            padding: 14px 16px;
           }
-          .meta-box strong { color: #0f172a; }
+          .meta-box-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: #3730a3;
+            margin-bottom: 8px;
+            border-bottom: 1px dashed #cbd5e1;
+            padding-bottom: 4px;
+          }
+          .meta-row {
+            margin-bottom: 4px;
+          }
+          .meta-row strong { color: #0f172a; }
 
           .section-title {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 800;
             color: #1e1b4b;
             border-bottom: 2px solid #4338ca;
             padding-bottom: 4px;
-            margin-top: 24px;
+            margin-top: 22px;
             margin-bottom: 12px;
             display: flex;
             align-items: center;
@@ -201,8 +272,19 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
             page-break-after: avoid;
           }
 
+          .scope-box {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 4px;
+            padding: 12px 16px;
+            margin-bottom: 18px;
+            font-size: 11px;
+            line-height: 1.6;
+            color: #1e3a8a;
+          }
+
           .module-group-title {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
             color: #3730a3;
             background-color: #e0e7ff;
@@ -218,7 +300,7 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 16px;
-            font-size: 11px;
+            font-size: 10.5px;
             page-break-inside: auto;
           }
           th {
@@ -262,16 +344,16 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
 
           .stat-pill {
             display: inline-block;
-            padding: 5px 12px;
+            padding: 4px 10px;
             border-radius: 6px;
             background-color: #f1f5f9;
             margin-right: 8px;
-            font-weight: 600;
-            font-size: 11px;
+            font-weight: 700;
+            font-size: 10px;
           }
 
           .footer {
-            margin-top: 30px;
+            margin-top: 28px;
             border-top: 1px solid #e2e8f0;
             padding-top: 10px;
             text-align: center;
@@ -279,37 +361,62 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
             color: #64748b;
             page-break-inside: avoid;
           }
-          
-          @media print {
-            .no-print { display: none !important; }
-            body { background: #fff; padding: 0; }
-          }
         </style>
       </head>
       <body>
+        <div class="brand-header">
+          <div class="brand-name">Digital Team Management Platform</div>
+          <div class="report-type">Executive Project & Deliverables Audit Report</div>
+        </div>
+
         <div class="header-banner">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
             <div>
               <h1>${project.name}</h1>
-              <p>Executive Project & Module Report • Generated ${new Date().toLocaleString()}</p>
+              <p>Official Executive Summary • Generated ${new Date().toLocaleString()}</p>
             </div>
             <div>
-              <span class="badge badge-primary">${project.projectType.replace(/_/g, ' ')}</span>
-              <span class="badge badge-success">${project.status}</span>
+              <span class="badge badge-primary">${project.projectType ? project.projectType.replace(/_/g, ' ') : 'GENERAL'}</span>
+              <span class="badge badge-success">${project.status || 'ACTIVE'}</span>
             </div>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">${progressPercent}%</div>
+            <div class="stat-label">Overall Progress</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${completedCount} / ${totalCount}</div>
+            <div class="stat-label">Tasks Completed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${totalHoursLogged.toFixed(1)} hrs</div>
+            <div class="stat-label">Total Time Logged</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${members.length}</div>
+            <div class="stat-label">Team Members</div>
           </div>
         </div>
 
         <div class="grid-2">
           <div class="meta-box">
-            <div><strong>Project Lead:</strong> ${leadName}</div>
-            <div><strong>Project Priority:</strong> ${project.priority}</div>
-            <div><strong>Report Time Horizon:</strong> ${rangeLabel}</div>
+            <div class="meta-box-title">🏢 CLIENT & STAKEHOLDER INFORMATION</div>
+            <div class="meta-row"><strong>Client Name:</strong> ${clientName}</div>
+            ${clientContact ? `<div class="meta-row"><strong>Contact Details:</strong> ${clientContact}</div>` : ''}
+            ${project.client?.address ? `<div class="meta-row"><strong>Address:</strong> 📍 ${project.client.address}</div>` : ''}
+            <div class="meta-row"><strong>👨‍🏫 Referred By (Person / Teacher):</strong> ${referencePerson}</div>
           </div>
+
           <div class="meta-box">
-            <div><strong>Total Team Members:</strong> ${members.length} Members</div>
-            <div><strong>Total Deliverable Tasks:</strong> ${filteredTasks.length} Tasks</div>
-            <div><strong>Project Creation Date:</strong> ${new Date(project.createdAt).toLocaleDateString()}</div>
+            <div class="meta-box-title">📋 PROJECT SUPERVISION & TIMELINE</div>
+            <div class="meta-row"><strong>👨‍🏫 Assigned By / Supervisor:</strong> ${supervisorName}</div>
+            <div class="meta-row"><strong>Project Lead:</strong> ${leadName}</div>
+            <div class="meta-row"><strong>Started Date:</strong> ${project.startDate ? new Date(project.startDate).toLocaleDateString() : 'Not Set'}</div>
+            <div class="meta-row"><strong>Target Delivery Date:</strong> ${project.targetEndDate ? new Date(project.targetEndDate).toLocaleDateString() : 'Not Set'}</div>
+            <div class="meta-row"><strong>Report Time Horizon:</strong> ${rangeLabel}</div>
           </div>
         </div>
 
@@ -318,11 +425,14 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
             ? `
           <div class="section-block">
             <div class="section-title">
-              <span>Executive Overview & Completion Progress</span>
-              <span style="font-size: 13px; color: #4338ca;">Overall Progress: ${progressPercent}%</span>
+              <span>Executive Scope & Completion Progress</span>
             </div>
-            <p style="margin-bottom: 10px;"><strong>Project Scope:</strong> ${project.scope || project.description || 'No detailed scope provided.'}</p>
-            
+
+            <div class="scope-box">
+              <strong>🎯 Project Scope & Key Deliverables:</strong><br/>
+              ${project.scope || project.description || 'No detailed scope provided.'}
+            </div>
+
             <div class="progress-bar-bg">
               <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
             </div>
@@ -341,15 +451,15 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
             ? `
           <div class="section-block">
             <div class="section-title">
-              <span>Team Members Roster (${members.length})</span>
+              <span>Assigned Team Roster (${members.length} Members)</span>
             </div>
             <table>
               <thead>
                 <tr>
-                  <th style="width: 40px;">#</th>
-                  <th>Full Member Name</th>
-                  <th>Email Address</th>
-                  <th>Project Role & Skills</th>
+                  <th style="width: 35px;">#</th>
+                  <th style="width: 30%;">Full Member Name</th>
+                  <th style="width: 35%;">Email Address</th>
+                  <th style="width: 35%;">Project Role & Skills Matrix</th>
                 </tr>
               </thead>
               <tbody>
@@ -358,7 +468,7 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
                     const u = m.user || m;
                     const skillsStr = u.skills && u.skills.length > 0
                       ? u.skills.map((s: any) => s.skillName).join(', ')
-                      : 'React, Node.js, UI/UX';
+                      : 'General Engineering';
                     return `
                     <tr>
                       <td>${idx + 1}</td>
@@ -366,7 +476,7 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
                       <td>${u.email}</td>
                       <td>
                         <strong>${u.role === 'ADMIN' ? 'Organization Admin' : 'Team Contributor'}</strong> (${u.memberType || 'STUDENT'})
-                        <br/><span style="color: #64748b; font-size: 10px;">Skills: ${skillsStr}</span>
+                        <br/><span style="color: #64748b; font-size: 9.5px;">Skills: ${skillsStr}</span>
                       </td>
                     </tr>
                   `;
@@ -399,23 +509,23 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
                 <table>
                   <thead>
                     <tr>
-                      <th style="width: 25%;">Task Deliverable Title</th>
+                      <th style="width: 32%;">Task Deliverable Title</th>
                       <th style="width: 10%;">Priority</th>
                       <th style="width: 12%;">Status</th>
-                      <th style="width: 28%;">Completed / Assigned Student</th>
-                      <th style="width: 25%;">Completion / Due Date</th>
+                      <th style="width: 26%;">Assigned Student</th>
+                      <th style="width: 20%;">Target / Completion Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     ${moduleTasks
                       .map((t) => {
                         const assigneeName = t.assignee
-                          ? `${t.assignee.firstName || ''} ${t.assignee.lastName || ''} (${t.assignee.email || ''})`.trim()
+                          ? `${t.assignee.firstName || ''} ${t.assignee.lastName || ''}`.trim()
                           : 'Unassigned';
 
                         let dateStr = 'No deadline';
                         if (t.status === 'COMPLETED' && t.completedAt) {
-                          dateStr = `<strong>Completed:</strong> ${new Date(t.completedAt).toLocaleString()}`;
+                          dateStr = `<strong>Completed:</strong> ${new Date(t.completedAt).toLocaleDateString()}`;
                         } else if (t.dueDate) {
                           dateStr = `<strong>Target Due:</strong> ${new Date(t.dueDate).toLocaleDateString()}`;
                         }
@@ -424,13 +534,12 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
                         <tr>
                           <td>
                             <strong>${t.title}</strong>
-                            ${t.description ? `<br/><span style="color: #64748b; font-size: 10px;">${t.description}</span>` : ''}
+                            ${t.description ? `<br/><span style="color: #64748b; font-size: 9.5px;">${t.description}</span>` : ''}
                           </td>
                           <td><span class="badge ${t.priority === 'CRITICAL' ? 'badge-danger' : t.priority === 'HIGH' ? 'badge-warning' : 'badge-primary'}">${t.priority}</span></td>
                           <td><span class="badge ${t.status === 'COMPLETED' ? 'badge-success' : 'badge-primary'}">${t.status}</span></td>
                           <td>
                             <strong>${assigneeName}</strong>
-                            ${t.status === 'COMPLETED' ? `<br/><span style="color: #059669; font-size: 10px;">✓ Completed by student</span>` : ''}
                           </td>
                           <td>${dateStr}</td>
                         </tr>
@@ -442,6 +551,43 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
               `;
               })
               .join('')}
+          </div>
+        `
+            : ''
+        }
+
+        ${
+          filteredActivities.length > 0
+            ? `
+          <div class="section-block">
+            <div class="section-title">
+              <span>Work Activity Logs (${filteredActivities.length} Sessions Logged • ${totalHoursLogged.toFixed(1)} Total Hours)</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 15%;">Log Date</th>
+                  <th style="width: 25%;">Contributor</th>
+                  <th style="width: 48%;">Work Activity Description</th>
+                  <th style="width: 12%;">Hours Spent</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredActivities
+                  .map((act) => {
+                    const contributor = act.user ? `${act.user.firstName} ${act.user.lastName}` : 'Contributor';
+                    return `
+                    <tr>
+                      <td>${new Date(act.dateTime || act.createdAt || Date.now()).toLocaleDateString()}</td>
+                      <td><strong>${contributor}</strong></td>
+                      <td>${act.workDescription || '-'}</td>
+                      <td><strong>${Number(act.hoursSpent).toFixed(1)} hrs</strong></td>
+                    </tr>
+                  `;
+                  })
+                  .join('')}
+              </tbody>
+            </table>
           </div>
         `
             : ''
@@ -469,7 +615,7 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
                     return `
                     <tr>
                       <td><strong>${author}</strong></td>
-                      <td>${c.commentText}</td>
+                      <td>${c.commentText || c.content}</td>
                       <td>${new Date(c.createdAt).toLocaleString()}</td>
                     </tr>
                   `;
@@ -521,7 +667,7 @@ export const generateProjectPdfReport = (options: PdfReportOptions) => {
         }
 
         <div class="footer">
-          <p>Digital Team Management Platform • Official Executive PDF Report • Confidential</p>
+          <p>Digital Team Management Platform • Official Executive Project Audit Report • Confidential</p>
         </div>
       </body>
     </html>

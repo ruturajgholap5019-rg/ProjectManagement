@@ -1,6 +1,8 @@
 import { prisma } from '../../config/database.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 
+// Category Management Service
+
 const DEFAULT_CATEGORIES = [
   { code: 'WEBSITE_WEBAPP', name: 'Website / Web App', icon: '🖥️', sortOrder: 1 },
   { code: 'MOBILE_APP', name: 'Mobile Application', icon: '📱', sortOrder: 2 },
@@ -14,24 +16,9 @@ const DEFAULT_CATEGORIES = [
 
 export class CategoryService {
   static async listCategories() {
-    let categories = await prisma.projectCategory.findMany({
+    return prisma.projectCategory.findMany({
       orderBy: { sortOrder: 'asc' },
     });
-
-    if (categories.length === 0) {
-      for (const cat of DEFAULT_CATEGORIES) {
-        await prisma.projectCategory.upsert({
-          where: { code: cat.code },
-          update: {},
-          create: cat,
-        });
-      }
-      categories = await prisma.projectCategory.findMany({
-        orderBy: { sortOrder: 'asc' },
-      });
-    }
-
-    return categories;
   }
 
   static async createCategory(data: { code: string; name: string; icon?: string; description?: string }) {
