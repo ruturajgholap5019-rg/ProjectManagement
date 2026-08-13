@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useCategoryFilterStore } from '../store/categoryFilterStore';
+import { useDateFilterStore } from '../store/dateFilterStore';
 import { Button } from '../components/UI/Button';
 import { Input, Select, TextArea } from '../components/UI/Input';
 import { Badge } from '../components/UI/Badge';
@@ -52,7 +53,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
   const [description, setDescription] = useState('');
   const [projectType, setProjectType] = useState('WEBSITE_WEBAPP');
   const [leadId, setLeadId] = useState('');
-  const [startDate, setStartDate] = useState('');
+  const [formStartDate, setFormStartDate] = useState('');
   const [targetEndDate, setTargetEndDate] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [availableMembers, setAvailableMembers] = useState<UserOption[]>([]);
@@ -117,7 +118,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
           description,
           projectType,
           leadId: leadId || undefined,
-          startDate: startDate || undefined,
+          startDate: formStartDate || undefined,
           targetEndDate: targetEndDate || undefined,
           priority,
         }),
@@ -127,8 +128,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
       setName('');
       setScope('');
       setDescription('');
-      setLeadId('');
-      setStartDate('');
+      setFormStartDate('');
       setTargetEndDate('');
       fetchProjects();
     } catch (err: any) {
@@ -156,9 +156,16 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
     }
   };
 
+  const { rangeType, startDate, endDate } = useDateFilterStore();
+
   const filteredProjects = projects.filter((p) => {
     if (selectedCategory && p.projectType !== selectedCategory) {
       return false;
+    }
+    if (rangeType && rangeType !== 'all' && (startDate || endDate)) {
+      const pDate = new Date(p.createdAt);
+      if (startDate && pDate < new Date(startDate)) return false;
+      if (endDate && pDate > new Date(endDate + 'T23:59:59')) return false;
     }
     if (statusFilter) {
       if (statusFilter === 'ONGOING' || statusFilter === 'ACTIVE') {
@@ -271,8 +278,8 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
               <Input
                 label="📅 Started Date (Optional)"
                 type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                value={formStartDate}
+                onChange={(e) => setFormStartDate(e.target.value)}
                 helperText="Project start date. Leave empty if Not Set."
               />
               <Input

@@ -23,9 +23,12 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+import { useDateFilterStore } from '../store/dateFilterStore';
+
 export const DashboardPage: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   const { selectedCategory } = useCategoryFilterStore();
+  const { rangeType, startDate, endDate } = useDateFilterStore();
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -33,7 +36,13 @@ export const DashboardPage: React.FC = () => {
     const fetchDashboard = async () => {
       setIsLoading(true);
       try {
-        const data = await apiFetch<any>('/dashboard');
+        const params = new URLSearchParams();
+        if (selectedCategory) params.append('category', selectedCategory);
+        if (rangeType && rangeType !== 'all') params.append('period', rangeType);
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+
+        const data = await apiFetch<any>(`/dashboard?${params.toString()}`);
         setDashboardData(data);
       } catch (err: any) {
         console.error('Failed to load dashboard:', err);
@@ -43,7 +52,7 @@ export const DashboardPage: React.FC = () => {
     };
 
     fetchDashboard();
-  }, [user]);
+  }, [user, selectedCategory, rangeType, startDate, endDate]);
 
   if (isLoading || !dashboardData) {
     return (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../services/api';
+import { useCategoryFilterStore } from '../store/categoryFilterStore';
 import { Button } from '../components/UI/Button';
 import { Input, Select } from '../components/UI/Input';
 import { Modal } from '../components/UI/Modal';
@@ -381,9 +382,15 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
     }
   };
 
+  const { selectedCategory } = useCategoryFilterStore();
+
   const filteredUsers = users.filter((u) => {
-    if (filterRole === 'ALL') return true;
-    return u.role === filterRole;
+    if (filterRole !== 'ALL' && u.role !== filterRole) return false;
+    if (selectedCategory) {
+      const hasCatProject = u.projectMemberships?.some((pm) => pm.project?.projectType === selectedCategory);
+      if (!hasCatProject) return false;
+    }
+    return true;
   });
 
   const targetResetUser = users.find((u) => u.id === resetUserId);

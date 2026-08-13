@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useCategoryFilterStore } from '../store/categoryFilterStore';
+import { useDateFilterStore } from '../store/dateFilterStore';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/UI/Button';
 import { Badge } from '../components/UI/Badge';
@@ -220,10 +221,20 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
     }
   };
 
+  const { rangeType, startDate, endDate } = useDateFilterStore();
+
   // Telemetry Calculations
-  const categoryFilteredTasks = tasks.filter(
-    (t) => !selectedCategory || (t.project?.projectType && t.project.projectType === selectedCategory)
-  );
+  const categoryFilteredTasks = tasks.filter((t) => {
+    if (selectedCategory && t.project?.projectType !== selectedCategory) return false;
+    if (rangeType && rangeType !== 'all' && (startDate || endDate)) {
+      const d = t.dueDate ? new Date(t.dueDate) : t.completedAt ? new Date(t.completedAt) : null;
+      if (d) {
+        if (startDate && d < new Date(startDate)) return false;
+        if (endDate && d > new Date(endDate + 'T23:59:59')) return false;
+      }
+    }
+    return true;
+  });
 
   const completedCount = categoryFilteredTasks.filter((t) => t.status === 'COMPLETED').length;
   const totalCount = categoryFilteredTasks.length;

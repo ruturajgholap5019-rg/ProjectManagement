@@ -23,6 +23,7 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOp
 
   // Edit Inline State
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCode, setEditCode] = useState('');
   const [editName, setEditName] = useState('');
   const [editIcon, setEditIcon] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -52,6 +53,7 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOp
 
   const handleStartEdit = (cat: CategoryItem) => {
     setEditingId(cat.id);
+    setEditCode(cat.code);
     setEditName(cat.name);
     setEditIcon(cat.icon || '📁');
     setEditDescription(cat.description || '');
@@ -59,7 +61,7 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOp
 
   const handleSaveEdit = async (id: string) => {
     try {
-      await updateCategory(id, { name: editName, icon: editIcon, description: editDescription });
+      await updateCategory(id, { code: editCode, name: editName, icon: editIcon, description: editDescription });
       setEditingId(null);
     } catch (err: any) {
       alert(err.message || 'Failed to update category');
@@ -201,7 +203,16 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOp
                       )}
                     </td>
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 700 }}>
-                      {cat.code}
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editCode}
+                          onChange={(e) => setEditCode(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
+                          style={{ width: '120px', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', textTransform: 'uppercase', fontFamily: 'monospace' }}
+                        />
+                      ) : (
+                        cat.code
+                      )}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       {isEditing ? (

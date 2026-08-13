@@ -10,15 +10,16 @@ export class DashboardController {
     try {
       if (!req.user) throw new AppError('Unauthorized', 401);
       
-      const cacheKey = `dashboard:${req.user.id}:${req.user.role}`;
+      const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+      const cacheKey = `dashboard:${req.user.id}:${req.user.role}:${category || 'ALL'}`;
       const cachedData = await cacheGet(cacheKey);
       if (cachedData) {
         sendSuccess(res, cachedData, 'Dashboard data retrieved successfully (cached)');
         return;
       }
 
-      const data = await DashboardService.getDashboard(req.user);
-      await cacheSet(cacheKey, data, 30); // Cache for 30s
+      const data = await DashboardService.getDashboard(req.user, { category });
+      await cacheSet(cacheKey, data, 10); // Cache for 10s
       sendSuccess(res, data, 'Dashboard data retrieved successfully');
     } catch (error) {
       next(error);

@@ -17,7 +17,7 @@ interface CategoryFilterState {
   setSelectedCategory: (category: string) => void;
   fetchCategories: () => Promise<void>;
   createCategory: (data: { code: string; name: string; icon?: string; description?: string }) => Promise<void>;
-  updateCategory: (id: string, data: { name?: string; icon?: string; description?: string; sortOrder?: number }) => Promise<void>;
+  updateCategory: (id: string, data: { code?: string; name?: string; icon?: string; description?: string; sortOrder?: number }) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
 }
 

@@ -1,27 +1,28 @@
 import { prisma } from '../../config/database.js';
 
 export class DashboardService {
-  static async getDashboard(user: { id: string; role: string }) {
+  static async getDashboard(user: { id: string; role: string }, filters?: { category?: string }) {
+    const pWhere = filters?.category ? { projectType: filters.category } : {};
     if (user.role === 'ADMIN') {
-      return this.getAdminDashboard();
+      return this.getAdminDashboard(pWhere);
     } else if (user.role === 'PROJECT_LEAD') {
-      return this.getLeadDashboard(user.id);
+      return this.getLeadDashboard(user.id, pWhere);
     } else {
-      return this.getMemberDashboard(user.id);
+      return this.getMemberDashboard(user.id, pWhere);
     }
   }
 
-  private static async getAdminDashboard() {
+  private static async getAdminDashboard(pWhere: any = {}) {
     const [totalProjects, activeProjects, atRiskProjects, totalUsers, activeTasks] = await Promise.all([
-      prisma.project.count({ where: { status: { not: 'CANCELLED' } } }),
-      prisma.project.count({ where: { status: { in: ['ACTIVE', 'ONGOING'] } } }),
-      prisma.project.count({ where: { status: 'AT_RISK' } }),
+      prisma.project.count({ where: { ...pWhere, status: { not: 'CANCELLED' } } }),
+      prisma.project.count({ where: { ...pWhere, status: { in: ['ACTIVE', 'ONGOING'] } } }),
+      prisma.project.count({ where: { ...pWhere, status: 'AT_RISK' } }),
       prisma.user.count({ where: { isActive: true, role: { not: 'ADMIN' } } }),
-      prisma.task.count({ where: { status: { in: ['TODO', 'IN_PROGRESS', 'REVIEW', 'REVISION'] } } }),
+      prisma.task.count({ where: { status: { in: ['TODO', 'IN_PROGRESS', 'REVIEW', 'REVISION'] }, ...(pWhere.projectType ? { project: { projectType: pWhere.projectType } } : {}) } }),
     ]);
 
     const attentionRequired = await prisma.project.findMany({
-      where: { status: { in: ['AT_RISK', 'ON_HOLD'] } },
+      where: { ...pWhere, status: { in: ['AT_RISK', 'ON_HOLD'] } },
       select: {
         id: true,
         name: true,
@@ -33,6 +34,7 @@ export class DashboardService {
     });
 
     const recentProjects = await prisma.project.findMany({
+      where: pWhere,
       take: 5,
       orderBy: { updatedAt: 'desc' },
       select: {
@@ -83,9 +85,9 @@ export class DashboardService {
     };
   }
 
-  private static async getLeadDashboard(leadId: string) {
+  private static async getLeadDashboard(leadId: string, pWhere: any = {}) {
     const myProjects = await prisma.project.findMany({
-      where: { leadId },
+      where: { leadId, ...pWhere },
       select: { id: true, name: true, status: true, statusReason: true },
     });
 
@@ -114,9 +116,12 @@ export class DashboardService {
     };
   }
 
-  private static async getMemberDashboard(memberId: string) {
+  private static async getMemberDashboard(memberId: string, pWhere: any = {}) {
     const assignedTasks = await prisma.task.findMany({
-      where: { assigneeId: memberId },
+      where: {
+        assigneeId: memberId,
+        ...(pWhere.projectType ? { project: { projectType: pWhere.projectType } } : {}),
+      },
       include: {
         project: { select: { id: true, name: true } },
       },

@@ -61,13 +61,31 @@ export class CategoryService {
     });
   }
 
-  static async updateCategory(id: string, data: { name?: string; icon?: string; description?: string; sortOrder?: number }) {
+  static async updateCategory(id: string, data: { code?: string; name?: string; icon?: string; description?: string; sortOrder?: number }) {
     const category = await prisma.projectCategory.findUnique({ where: { id } });
     if (!category) throw new AppError('Category not found', 404);
+
+    let newCode = category.code;
+    if (data.code && data.code.trim() !== category.code) {
+      newCode = data.code.trim().toUpperCase().replace(/\s+/g, '_');
+      const existing = await prisma.projectCategory.findFirst({
+        where: { code: newCode, NOT: { id } },
+      });
+      if (existing) {
+        throw new AppError(`Category code "${newCode}" is already in use by another category`, 400);
+      }
+
+      // Cascade update to projects using this category code
+      await prisma.project.updateMany({
+        where: { projectType: category.code },
+        data: { projectType: newCode },
+      });
+    }
 
     return prisma.projectCategory.update({
       where: { id },
       data: {
+        code: newCode,
         ...(data.name && { name: data.name.trim() }),
         ...(data.icon && { icon: data.icon.trim() }),
         ...(data.description !== undefined && { description: data.description?.trim() }),
