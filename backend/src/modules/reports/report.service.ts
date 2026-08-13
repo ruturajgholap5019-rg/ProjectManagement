@@ -25,13 +25,18 @@ function headerCell(ws, ref, value, bgColor = COLORS.header, fontColor = COLORS.
   cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
 }
 
-function dataCell(ws, ref, value, bgColor, bold = false, align = 'left') {
+function dataCell(ws, ref, value, bgColor, bold = false, align = 'left', wrapText = false) {
   const cell = ws.getCell(ref);
   cell.value = value;
   if (bgColor) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgColor } };
   cell.font = { bold, size: 10 };
-  cell.alignment = { vertical: 'middle', horizontal: align, wrapText: true };
-  cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+  cell.alignment = { vertical: 'middle', horizontal: align, wrapText };
+  cell.border = {
+    top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+    left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+    bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+    right: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+  };
   return cell;
 }
 
@@ -45,10 +50,10 @@ function statusBg(status) {
 
 function formatType(t) {
   const map = { WEBSITE_WEBAPP: 'Website / Web App', MOBILE_APP: 'Mobile App', BMS: 'BMS / Enterprise', UNIVERSITY_NEP: 'University / NEP', DESIGN_SOCIAL_MEDIA: 'Design & Social Media', PODCAST_MEDIA: 'Podcast & Media', RESEARCH: 'Digital Research', OTHER: 'Other' };
-  return map[t] || t.replace(/_/g, ' ');
+  return map[t] || (t ? t.replace(/_/g, ' ') : '—');
 }
 
-function fmtStatus(s) { return s.replace(/_/g, ' '); }
+function fmtStatus(s) { return s ? s.replace(/_/g, ' ') : '—'; }
 function col(i) { return String.fromCharCode(65 + i); }
 
 async function buildDashboard(wb, projects, tasks) {
@@ -61,7 +66,7 @@ async function buildDashboard(wb, projects, tasks) {
   t.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
   t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } };
   t.alignment = { vertical: 'middle', horizontal: 'center' };
-  ws.getRow(1).height = 36;
+  ws.getRow(1).height = 38;
 
   ws.mergeCells('A2:F2');
   ws.getCell('A2').value = 'Report Generated: ' + new Date().toLocaleString('en-IN');
@@ -83,10 +88,12 @@ async function buildDashboard(wb, projects, tasks) {
   statusLabels.forEach(([k, l]) => {
     dataCell(ws, 'A' + r, l, undefined, false, 'left');
     dataCell(ws, 'B' + r, projects.filter(p => p.status === k).length, undefined, true, 'center');
+    ws.getRow(r).height = 22;
     r++;
   });
   dataCell(ws, 'A' + r, 'Total', COLORS.subHeader, true, 'left');
   dataCell(ws, 'B' + r, projects.length, COLORS.subHeader, true, 'center');
+  ws.getRow(r).height = 24;
 
   ws.mergeCells('D4:F4');
   const sec2 = ws.getCell('D4');
@@ -102,9 +109,11 @@ async function buildDashboard(wb, projects, tasks) {
   const avgPct = projects.length > 0 ? Math.round(projects.reduce((acc, p) => { const pt = tasks.filter(t => t.projectId === p.id); const pc = pt.filter(t => t.status === 'COMPLETED').length; return acc + (pt.length > 0 ? pc / pt.length : 0); }, 0) / projects.length * 100) : 0;
 
   [['Total Projects', projects.length],['Completed Projects', completedP],['Overdue Projects', overdue],['Total Tasks', totalT],['Completed Tasks', completedT],['Avg. % Complete', avgPct + '%']].forEach(([l, v], i) => {
-    dataCell(ws, 'D' + (5+i), l, COLORS.subHeader, true, 'left');
-    ws.mergeCells('E' + (5+i) + ':F' + (5+i));
-    dataCell(ws, 'E' + (5+i), v, undefined, true, 'center');
+    const rowNum = 5 + i;
+    dataCell(ws, 'D' + rowNum, l, COLORS.subHeader, true, 'left');
+    ws.mergeCells('E' + rowNum + ':F' + rowNum);
+    dataCell(ws, 'E' + rowNum, v, undefined, true, 'center');
+    ws.getRow(rowNum).height = 22;
   });
 
   const startRow = r + 2;
@@ -114,9 +123,11 @@ async function buildDashboard(wb, projects, tasks) {
   sec3.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
   sec3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E75B6' } };
   sec3.alignment = { horizontal: 'center' };
+  ws.getRow(startRow).height = 26;
 
   const hRow = startRow + 1;
   ['Team Member','Email','Active Projects','Completed Projects','Total Tasks','Overdue Tasks'].forEach((h, i) => headerCell(ws, col(i) + hRow, h));
+  ws.getRow(hRow).height = 24;
 
   const mmap = new Map();
   projects.forEach(p => { (p.members || []).forEach(m => { const u = m.user || m; const uid = u.id || m.userId; if (!mmap.has(uid)) mmap.set(uid, { name: ((u.firstName||'') + ' ' + (u.lastName||'')).trim() || u.email, email: u.email || '', pids: new Set() }); mmap.get(uid).pids.add(p.id); }); });
@@ -135,10 +146,11 @@ async function buildDashboard(wb, projects, tasks) {
     dataCell(ws, 'D' + mr, cp, bg, false, 'center');
     dataCell(ws, 'E' + mr, mt.length, bg, false, 'center');
     dataCell(ws, 'F' + mr, ot, ot > 0 ? COLORS.atRisk : bg, ot > 0, 'center');
+    ws.getRow(mr).height = 22;
     mr++;
   }
 
-  ws.columns = [{ width: 28 },{ width: 30 },{ width: 18 },{ width: 22 },{ width: 22 },{ width: 20 }];
+  ws.columns = [{ width: 30 },{ width: 34 },{ width: 18 },{ width: 22 },{ width: 20 },{ width: 18 }];
 }
 
 async function buildProjects(wb, projects, tasks) {
@@ -151,10 +163,10 @@ async function buildProjects(wb, projects, tasks) {
   t.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
   t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } };
   t.alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getRow(1).height = 30;
+  ws.getRow(1).height = 32;
 
   ['Sr. No.','Project Name','Category','Status','Priority','Project Lead','Team Members','Start Date','Target End Date','Total Tasks','Completed Tasks','% Complete','Scope / Deliverables','Notes'].forEach((h, i) => headerCell(ws, col(i) + '2', h));
-  ws.getRow(2).height = 22;
+  ws.getRow(2).height = 26;
 
   projects.forEach((p, idx) => {
     const row = 3 + idx;
@@ -177,12 +189,27 @@ async function buildProjects(wb, projects, tasks) {
     dataCell(ws, 'J' + row, pt.length, bg, false, 'center');
     dataCell(ws, 'K' + row, pc, bg, false, 'center');
     dataCell(ws, 'L' + row, pct + '%', bg, true, 'center');
-    dataCell(ws, 'M' + row, p.scope || p.description || '—', bg, false, 'left');
-    dataCell(ws, 'N' + row, p.statusReason || '—', bg, false, 'left');
-    ws.getRow(row).height = 20;
+    dataCell(ws, 'M' + row, p.scope || p.description || '—', bg, false, 'left', true);
+    dataCell(ws, 'N' + row, p.statusReason || '—', bg, false, 'left', true);
+    ws.getRow(row).height = 26;
   });
 
-  ws.columns = [{ width: 8 },{ width: 30 },{ width: 22 },{ width: 14 },{ width: 12 },{ width: 22 },{ width: 30 },{ width: 14 },{ width: 16 },{ width: 12 },{ width: 16 },{ width: 12 },{ width: 40 },{ width: 30 }];
+  ws.columns = [
+    { width: 10 }, // A: Sr. No.
+    { width: 42 }, // B: Project Name
+    { width: 28 }, // C: Category
+    { width: 16 }, // D: Status
+    { width: 14 }, // E: Priority
+    { width: 24 }, // F: Project Lead
+    { width: 36 }, // G: Team Members
+    { width: 16 }, // H: Start Date
+    { width: 18 }, // I: Target End Date
+    { width: 14 }, // J: Total Tasks
+    { width: 18 }, // K: Completed Tasks
+    { width: 14 }, // L: % Complete
+    { width: 50 }, // M: Scope / Deliverables
+    { width: 35 }, // N: Notes
+  ];
   if (projects.length > 0) ws.autoFilter = { from: 'A2', to: 'N' + (2 + projects.length) };
 }
 
@@ -196,10 +223,10 @@ async function buildTasks(wb, tasks, projects) {
   t.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
   t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } };
   t.alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getRow(1).height = 30;
+  ws.getRow(1).height = 32;
 
   ['Sr. No.','Project','Milestone','Task Title','Description','Assignee','Priority','Status','Start Date','Due Date','Completed At','Notes'].forEach((h, i) => headerCell(ws, col(i) + '2', h));
-  ws.getRow(2).height = 22;
+  ws.getRow(2).height = 26;
 
   const pmap = new Map(projects.map(p => [p.id, p.name]));
   tasks.forEach((task, idx) => {
@@ -210,18 +237,31 @@ async function buildTasks(wb, tasks, projects) {
     dataCell(ws, 'B' + row, pmap.get(task.projectId) || '—', bg, false, 'left');
     dataCell(ws, 'C' + row, task.milestone?.name || '—', bg, false, 'left');
     dataCell(ws, 'D' + row, task.title, bg, true, 'left');
-    dataCell(ws, 'E' + row, task.description || '—', bg, false, 'left');
+    dataCell(ws, 'E' + row, task.description || '—', bg, false, 'left', true);
     dataCell(ws, 'F' + row, an, bg, false, 'left');
     dataCell(ws, 'G' + row, task.priority || 'MEDIUM', bg, false, 'center');
     dataCell(ws, 'H' + row, fmtStatus(task.status || 'TODO'), bg, true, 'center');
     dataCell(ws, 'I' + row, task.startDate ? new Date(task.startDate).toLocaleDateString('en-IN') : '—', bg, false, 'center');
     dataCell(ws, 'J' + row, task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-IN') : '—', bg, false, 'center');
     dataCell(ws, 'K' + row, task.completedAt ? new Date(task.completedAt).toLocaleDateString('en-IN') : '—', bg, false, 'center');
-    dataCell(ws, 'L' + row, task.completionNotes || task.blockedReason || '—', bg, false, 'left');
-    ws.getRow(row).height = 18;
+    dataCell(ws, 'L' + row, task.completionNotes || task.blockedReason || '—', bg, false, 'left', true);
+    ws.getRow(row).height = 26;
   });
 
-  ws.columns = [{ width: 8 },{ width: 28 },{ width: 22 },{ width: 32 },{ width: 36 },{ width: 22 },{ width: 12 },{ width: 14 },{ width: 14 },{ width: 14 },{ width: 16 },{ width: 30 }];
+  ws.columns = [
+    { width: 10 }, // A: Sr. No.
+    { width: 40 }, // B: Project
+    { width: 26 }, // C: Milestone
+    { width: 42 }, // D: Task Title
+    { width: 48 }, // E: Description
+    { width: 26 }, // F: Assignee
+    { width: 14 }, // G: Priority
+    { width: 16 }, // H: Status
+    { width: 16 }, // I: Start Date
+    { width: 16 }, // J: Due Date
+    { width: 18 }, // K: Completed At
+    { width: 35 }, // L: Notes
+  ];
   if (tasks.length > 0) ws.autoFilter = { from: 'A2', to: 'L' + (2 + tasks.length) };
 }
 
@@ -235,10 +275,10 @@ async function buildActivityLog(wb, activities) {
   t.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
   t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } };
   t.alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getRow(1).height = 30;
+  ws.getRow(1).height = 32;
 
   ['Serial Number','Date & Time','Team Member (Student)','Project Name','Work Description','Hours Spent','Assigned By'].forEach((h, i) => headerCell(ws, col(i) + '2', h));
-  ws.getRow(2).height = 22;
+  ws.getRow(2).height = 26;
 
   let totalHours = 0;
   activities.forEach((a, idx) => {
@@ -253,10 +293,10 @@ async function buildActivityLog(wb, activities) {
     dataCell(ws, 'B' + row, dateStr, bg, false, 'left');
     dataCell(ws, 'C' + row, member, bg, false, 'left');
     dataCell(ws, 'D' + row, a.project?.name || '—', bg, false, 'left');
-    dataCell(ws, 'E' + row, a.workDescription || '—', bg, false, 'left');
+    dataCell(ws, 'E' + row, a.workDescription || '—', bg, false, 'left', true);
     dataCell(ws, 'F' + row, a.hoursSpent || 0, bg, false, 'center');
     dataCell(ws, 'G' + row, assigner, bg, false, 'left');
-    ws.getRow(row).height = 18;
+    ws.getRow(row).height = 26;
   });
 
   const tr = 3 + activities.length;
@@ -264,8 +304,17 @@ async function buildActivityLog(wb, activities) {
   dataCell(ws, 'A' + tr, 'TOTAL', COLORS.subHeader, true, 'right');
   dataCell(ws, 'F' + tr, totalHours, COLORS.subHeader, true, 'center');
   dataCell(ws, 'G' + tr, activities.length + ' records', COLORS.subHeader, false, 'left');
+  ws.getRow(tr).height = 26;
 
-  ws.columns = [{ width: 16 },{ width: 22 },{ width: 26 },{ width: 28 },{ width: 40 },{ width: 14 },{ width: 22 }];
+  ws.columns = [
+    { width: 16 }, // A: Serial Number
+    { width: 24 }, // B: Date & Time
+    { width: 28 }, // C: Team Member
+    { width: 40 }, // D: Project Name
+    { width: 52 }, // E: Work Description
+    { width: 16 }, // F: Hours Spent
+    { width: 24 }, // G: Assigned By
+  ];
   if (activities.length > 0) ws.autoFilter = { from: 'A2', to: 'G' + (2 + activities.length) };
 }
 

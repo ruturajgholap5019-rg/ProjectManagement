@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { ReportController } from './report.controller.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
 import { requireRoles } from '../../middlewares/rbac.middleware.js';
@@ -8,7 +8,7 @@ const router = Router();
 
 router.use(authenticate);
 
-// Admin-only: export full Excel report (Dashboard + Projects + Tasks + Activity Log)
-router.get('/export/excel', requireRoles(UserRole.ADMIN), ReportController.exportExcel);
+// Export full Excel report (Dashboard + Projects + Tasks + Activity Log)
+router.get('/export/excel', ReportController.exportExcel);
 
 export default router;

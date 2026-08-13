@@ -84,35 +84,6 @@ export const WorkActivitiesPage: React.FC = () => {
     fetchDropdownData();
   }, []);
 
-  const handleExportCSV = async () => {
-    try {
-      const token = useAuthStore.getState().accessToken;
-      const params = new URLSearchParams();
-      if (globalFilter.rangeType && globalFilter.rangeType !== 'all') {
-        params.append('period', globalFilter.rangeType);
-      }
-      if (globalFilter.rangeType === 'custom') {
-        if (globalFilter.startDate) params.append('startDate', globalFilter.startDate);
-        if (globalFilter.endDate) params.append('endDate', globalFilter.endDate);
-      }
-      if (search) params.append('search', search);
-
-      const res = await fetch(`/api/v1/activities/export/csv?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `work_activities_report_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch (err: any) {
-      alert('Failed to export CSV: ' + err.message);
-    }
-  };
-
   const handleExportExcel = async () => {
     try {
       const token = useAuthStore.getState().accessToken;
@@ -185,22 +156,18 @@ export const WorkActivitiesPage: React.FC = () => {
           <Button variant="gradient" onClick={() => setIsLogModalOpen(true)}>
             <Plus size={18} /> Log Work Activity
           </Button>
-          <Button variant="secondary" onClick={handleExportCSV}>
-            <Download size={18} /> Export Activity (CSV)
+          <Button
+            variant="secondary"
+            onClick={handleExportExcel}
+            style={{
+              background: 'linear-gradient(135deg, #1D6F42, #217346)',
+              color: '#fff',
+              border: 'none',
+              fontWeight: 700,
+            }}
+          >
+            <Download size={18} /> Export Full Report (Excel)
           </Button>
-          {user?.role === 'ADMIN' && (
-            <Button
-              variant="secondary"
-              onClick={handleExportExcel}
-              style={{
-                background: 'linear-gradient(135deg, #1D6F42, #217346)',
-                color: '#fff',
-                border: 'none',
-              }}
-            >
-              <Download size={18} /> Export Full Report (Excel)
-            </Button>
-          )}
         </div>
       </div>
 
