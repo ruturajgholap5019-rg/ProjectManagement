@@ -51,6 +51,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
   const [description, setDescription] = useState('');
   const [projectType, setProjectType] = useState('WEBSITE_WEBAPP');
   const [leadId, setLeadId] = useState('');
+  const [startDate, setStartDate] = useState('');
   const [targetEndDate, setTargetEndDate] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [availableMembers, setAvailableMembers] = useState<UserOption[]>([]);
@@ -115,6 +116,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
           description,
           projectType,
           leadId: leadId || undefined,
+          startDate: startDate || undefined,
           targetEndDate: targetEndDate || undefined,
           priority,
         }),
@@ -125,6 +127,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
       setScope('');
       setDescription('');
       setLeadId('');
+      setStartDate('');
       setTargetEndDate('');
       fetchProjects();
     } catch (err: any) {
@@ -258,13 +261,33 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
               />
             </div>
 
-            <Input
-              label="Project Target Deadline (Optional)"
-              type="date"
-              value={targetEndDate}
-              onChange={(e) => setTargetEndDate(e.target.value)}
-              helperText="Optional target deadline. If overdue, status automatically switches to AT_RISK."
-            />
+            {/* Supervisor / Creator Info Banner */}
+            <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.88rem' }}>
+              <span style={{ fontSize: '1.2rem' }}>👨‍🏫</span>
+              <div>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Assigned By / Supervisor: </span>
+                <span style={{ color: 'var(--primary)', fontWeight: 800 }}>
+                  {user ? `${user.firstName} ${user.lastName} (${user.role})` : 'System Admin'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <Input
+                label="📅 Started Date (Optional)"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                helperText="Project start date. Leave empty if Not Set."
+              />
+              <Input
+                label="🎯 Target Delivery Date (Optional)"
+                type="date"
+                value={targetEndDate}
+                onChange={(e) => setTargetEndDate(e.target.value)}
+                helperText="Target completion deadline. Automatically sets status to AT_RISK if overdue."
+              />
+            </div>
 
             <TextArea
               label="Project Scope & Key Deliverables"

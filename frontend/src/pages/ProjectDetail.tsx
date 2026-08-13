@@ -34,6 +34,8 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
   const [editPriority, setEditPriority] = useState('');
   const [editScope, setEditScope] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editTargetEndDate, setEditTargetEndDate] = useState('');
   const [isSavingProject, setIsSavingProject] = useState(false);
 
   const openEditModal = () => {
@@ -43,6 +45,8 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     setEditPriority(project.priority || 'MEDIUM');
     setEditScope(project.scope || '');
     setEditDescription(project.description || '');
+    setEditStartDate(project.startDate ? new Date(project.startDate).toISOString().slice(0, 10) : '');
+    setEditTargetEndDate(project.targetEndDate ? new Date(project.targetEndDate).toISOString().slice(0, 10) : '');
     setIsEditProjectOpen(true);
   };
 
@@ -58,6 +62,8 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
           priority: editPriority,
           scope: editScope,
           description: editDescription,
+          startDate: editStartDate || null,
+          targetEndDate: editTargetEndDate || null,
         }),
       });
 
@@ -1144,17 +1150,22 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
             ]}
           />
 
-          <Select
-            label="Project Priority"
-            value={editPriority}
-            onChange={(e) => setEditPriority(e.target.value)}
-            options={[
-              { value: 'LOW', label: 'Low Priority' },
-              { value: 'MEDIUM', label: 'Medium Priority' },
-              { value: 'HIGH', label: 'High Priority' },
-              { value: 'CRITICAL', label: 'Critical Priority' },
-            ]}
-          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <Input
+              label="📅 Started Date (Optional)"
+              type="date"
+              value={editStartDate}
+              onChange={(e) => setEditStartDate(e.target.value)}
+              helperText="Leave empty if Not Set"
+            />
+            <Input
+              label="🎯 Target Delivery Date (Optional)"
+              type="date"
+              value={editTargetEndDate}
+              onChange={(e) => setEditTargetEndDate(e.target.value)}
+              helperText="Target completion deadline"
+            />
+          </div>
 
           <TextArea
             label="Project Scope & Deliverables"
