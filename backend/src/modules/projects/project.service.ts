@@ -11,6 +11,8 @@ export interface CreateProjectInput {
   scope?: string;
   projectType: ProjectType;
   leadId?: string;
+  clientId?: string;
+  referencePerson?: string;
   priority?: Priority;
   startDate?: string;
   targetEndDate?: string;
@@ -39,6 +41,8 @@ export class ProjectService {
         scope: input.scope?.trim(),
         projectType: input.projectType,
         leadId: input.leadId || null,
+        clientId: input.clientId || null,
+        referencePerson: input.referencePerson?.trim() || null,
         priority: input.priority || Priority.MEDIUM,
         startDate: input.startDate ? new Date(input.startDate) : null,
         targetEndDate: input.targetEndDate ? new Date(input.targetEndDate) : null,
@@ -198,6 +202,9 @@ export class ProjectService {
         previousLead: {
           select: { id: true, firstName: true, lastName: true, email: true },
         },
+        client: {
+          select: { id: true, name: true, phone: true, email: true, address: true, referencePerson: true },
+        },
         _count: {
           select: {
             tasks: true,
@@ -241,6 +248,9 @@ export class ProjectService {
         },
         previousLead: {
           select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        client: {
+          select: { id: true, name: true, phone: true, email: true, address: true, referencePerson: true },
         },
         members: {
           include: {
@@ -341,6 +351,8 @@ export class ProjectService {
         scope: data.scope?.trim(),
         projectType: data.projectType,
         leadId: data.leadId,
+        clientId: data.clientId !== undefined ? data.clientId || null : undefined,
+        referencePerson: data.referencePerson !== undefined ? data.referencePerson?.trim() || null : undefined,
         previousLeadId,
         handedOverAt,
         priority: data.priority,
@@ -354,6 +366,7 @@ export class ProjectService {
       include: {
         lead: { select: { id: true, firstName: true, lastName: true, email: true } },
         previousLead: { select: { id: true, firstName: true, lastName: true, email: true } },
+        client: { select: { id: true, name: true, phone: true, email: true, address: true, referencePerson: true } },
       },
     });
 

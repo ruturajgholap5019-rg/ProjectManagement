@@ -21,6 +21,8 @@ interface ProjectItem {
   completedTasks: number;
   memberCount: number;
   lead?: { id: string; firstName: string; lastName: string; email: string };
+  client?: { id: string; name: string; phone?: string; email?: string; address?: string; referencePerson?: string };
+  referencePerson?: string;
   createdAt: string;
 }
 
@@ -57,6 +59,9 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
   const [targetEndDate, setTargetEndDate] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [availableMembers, setAvailableMembers] = useState<UserOption[]>([]);
+  const [clientId, setClientId] = useState('');
+  const [referencePerson, setReferencePerson] = useState('');
+  const [availableClients, setAvailableClients] = useState<{ id: string; name: string }[]>([]);
 
   const openCreateForm = () => {
     setIsCreateOpen(true);
@@ -93,6 +98,15 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
     }
   };
 
+  const fetchClients = async () => {
+    try {
+      const data = await apiFetch<{ id: string; name: string }[]>('/clients');
+      setAvailableClients(data);
+    } catch {
+      // Ignore
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
   }, [statusFilter]);
@@ -100,6 +114,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
   useEffect(() => {
     if (user?.role === 'ADMIN') {
       fetchMembers();
+      fetchClients();
     }
   }, [user]);
 
@@ -118,6 +133,8 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
           description,
           projectType,
           leadId: leadId || undefined,
+          clientId: clientId || undefined,
+          referencePerson: referencePerson || undefined,
           startDate: formStartDate || undefined,
           targetEndDate: targetEndDate || undefined,
           priority,
@@ -128,6 +145,9 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
       setName('');
       setScope('');
       setDescription('');
+      setLeadId('');
+      setClientId('');
+      setReferencePerson('');
       setFormStartDate('');
       setTargetEndDate('');
       fetchProjects();
@@ -140,8 +160,9 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
 
   const getStatusBadge = (status: ProjectItem['status']) => {
     switch (status) {
+      case 'ACTIVE':
       case 'ONGOING':
-        return <Badge variant="success" pulse>Ongoing</Badge>;
+        return <Badge variant="success" pulse>Active</Badge>;
       case 'AT_RISK':
         return <Badge variant="danger" pulse>At Risk</Badge>;
       case 'ON_HOLD':
@@ -260,6 +281,28 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
                   { value: 'HIGH', label: 'High' },
                   { value: 'CRITICAL', label: 'Critical' },
                 ]}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <Select
+                label="🏢 Client (Optional)"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                options={[
+                  { value: '', label: 'None (Internal / No Client)' },
+                  ...availableClients.map((c) => ({
+                    value: c.id,
+                    label: `🏢 ${c.name}`,
+                  })),
+                ]}
+              />
+              <Input
+                label="👨‍🏫 Referred By / Reference Person or Teacher (Optional)"
+                placeholder="e.g. Dr. Sharma / Prof. Kulkarni"
+                value={referencePerson}
+                onChange={(e) => setReferencePerson(e.target.value)}
+                helperText="Person or teacher who referred this project/client"
               />
             </div>
 
@@ -533,9 +576,24 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
                   <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.02em' }}>
                     {p.name}
                   </h3>
-                  <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: '1.5', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: '1.5', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {p.scope || p.description || 'No scope details specified.'}
                   </p>
+
+                  {(p.client || p.referencePerson) && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', fontSize: '0.8rem' }}>
+                      {p.client && (
+                        <span style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          🏢 Client: {p.client.name}
+                        </span>
+                      )}
+                      {(p.referencePerson || p.client?.referencePerson) && (
+                        <span style={{ backgroundColor: 'var(--bg-main)', color: 'var(--text-secondary)', fontWeight: 600, padding: '3px 10px', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          👨‍🏫 Referred By: {p.referencePerson || p.client?.referencePerson}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>

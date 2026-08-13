@@ -14,6 +14,7 @@ import { requireRoles } from '../middlewares/rbac.middleware.js';
 import { UserRole } from '../types/enums.js';
 import reportRouter from '../modules/reports/report.routes.js';
 import categoryRouter from '../modules/categories/category.routes.js';
+import clientRouter from '../modules/clients/client.routes.js';
 
 const router = Router();
 
@@ -83,5 +84,6 @@ router.use('/', notificationRouter);
 // ----------------------------------------------------------------------------
 router.use('/reports', reportRouter);
 router.use('/categories', categoryRouter);
+router.use('/clients', clientRouter);
 
 export default router;

@@ -80,11 +80,14 @@ model Project {
   handedOverAt        DateTime?     @map("handed_over_at")
   maintenanceRequired Boolean       @default(false) @map("maintenance_required")
   maintenanceNotes    String?       @map("maintenance_notes")
+  clientId            String?       @map("client_id")
+  referencePerson     String?       @map("reference_person") // Referred By (Person / Teacher)
   createdBy           String        @map("created_by")
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
   // Relations
+  client              Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
   lead                User?           @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
   previousLead        User?           @relation("PreviousLead", fields: [previousLeadId], references: [id], onDelete: SetNull)
   creator             User            @relation("ProjectCreator", fields: [createdBy], references: [id])
@@ -97,9 +100,29 @@ model Project {
   activityLogs        ActivityLog[]
 
   @@index([leadId])
+  @@index([clientId])
   @@index([status])
   @@index([createdBy])
   @@map("projects")
+}
+
+// ============================================================================
+// TABLE: clients
+// ============================================================================
+
+model Client {
+  id              String    @id @default(uuid())
+  name            String
+  address         String?
+  referencePerson String?   @map("reference_person")
+  phone           String?
+  email           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  projects        Project[]
+
+  @@map("clients")
 }
 
 // ============================================================================

@@ -8,7 +8,7 @@ import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { Badge } from '../components/UI/Badge';
 import { StudentProfilePage } from './StudentProfile';
 import { isValidPhone, isValidEmail } from '../utils/validation';
-import { UserPlus, UserCheck, UserX, KeyRound, Edit2, Trash2, Users as UsersIcon, Sparkles, Shuffle, Copy, Check, LayoutDashboard, ArrowLeft, Eye, EyeOff, X, Plus, ChevronDown } from 'lucide-react';
+import { UserPlus, UserCheck, UserX, KeyRound, Edit2, Trash2, Users as UsersIcon, Sparkles, Shuffle, Copy, Check, LayoutDashboard, ArrowLeft, Eye, EyeOff, X, Plus, ChevronDown, Building } from 'lucide-react';
 
 interface UserItem {
   id: string;
@@ -29,6 +29,17 @@ interface ProjectItem {
   id: string;
   name: string;
   status: string;
+}
+
+interface ClientItem {
+  id: string;
+  name: string;
+  address?: string;
+  referencePerson?: string;
+  phone?: string;
+  email?: string;
+  projects?: { id: string; name: string; status: string; projectType: string }[];
+  createdAt: string;
 }
 
 const PRESET_SKILLS = [
@@ -108,6 +119,18 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
   const [isResetPassVisible, setIsResetPassVisible] = useState(false);
   const [selectedViewUserId, setSelectedViewUserId] = useState<string | null>(null);
 
+  // Client Management State
+  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<ClientItem | null>(null);
+  const [cName, setCName] = useState('');
+  const [cAddress, setCAddress] = useState('');
+  const [cReferencePerson, setCReferencePerson] = useState('');
+  const [cPhone, setCPhone] = useState('');
+  const [cEmail, setCEmail] = useState('');
+  const [cProjectId, setCProjectId] = useState('');
+  const [isSavingClient, setIsSavingClient] = useState(false);
+
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
@@ -129,9 +152,19 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
     }
   };
 
+  const fetchClients = async () => {
+    try {
+      const data = await apiFetch<ClientItem[]>('/clients');
+      setClients(data);
+    } catch (err: any) {
+      console.error('Failed to fetch clients:', err);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchProjects();
+    fetchClients();
   }, []);
 
   const generateRandomPassword = () => {
@@ -371,6 +404,79 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
       fetchUsers();
     } catch (err: any) {
       alert(err.message || 'Failed to update password.');
+    }
+  };
+
+  const openCreateClientModal = () => {
+    setEditingClient(null);
+    setCName('');
+    setCAddress('');
+    setCReferencePerson('');
+    setCPhone('');
+    setCEmail('');
+    setCProjectId('');
+    setIsClientModalOpen(true);
+  };
+
+  const openEditClientModal = (client: ClientItem) => {
+    setEditingClient(client);
+    setCName(client.name);
+    setCAddress(client.address || '');
+    setCReferencePerson(client.referencePerson || '');
+    setCPhone(client.phone || '');
+    setCEmail(client.email || '');
+    setCProjectId(client.projects && client.projects.length > 0 ? client.projects[0].id : '');
+    setIsClientModalOpen(true);
+  };
+
+  const handleSaveClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cName.trim()) return;
+
+    setIsSavingClient(true);
+    try {
+      if (editingClient) {
+        await apiFetch(`/clients/${editingClient.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: cName.trim(),
+            address: cAddress.trim() || undefined,
+            referencePerson: cReferencePerson.trim() || undefined,
+            phone: cPhone.trim() || undefined,
+            email: cEmail.trim() || undefined,
+            projectId: cProjectId || undefined,
+          }),
+        });
+      } else {
+        await apiFetch('/clients', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: cName.trim(),
+            address: cAddress.trim() || undefined,
+            referencePerson: cReferencePerson.trim() || undefined,
+            phone: cPhone.trim() || undefined,
+            email: cEmail.trim() || undefined,
+            projectId: cProjectId || undefined,
+          }),
+        });
+      }
+      setIsClientModalOpen(false);
+      fetchClients();
+      fetchProjects();
+    } catch (err: any) {
+      alert(err.message || 'Failed to save client details');
+    } finally {
+      setIsSavingClient(false);
+    }
+  };
+
+  const handleDeleteClient = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete client "${name}"?`)) return;
+    try {
+      await apiFetch(`/clients/${id}`, { method: 'DELETE' });
+      fetchClients();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete client');
     }
   };
 
@@ -766,14 +872,23 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
           </p>
         </div>
 
-        <Button variant="gradient" onClick={handleOpenCreate} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <UserPlus size={18} /> Register Student / Team Member
-        </Button>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <Button variant="gradient" onClick={handleOpenCreate} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <UserPlus size={18} /> Register Student / Team Member
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={openCreateClientModal}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--primary)', color: 'var(--primary)', fontWeight: 700 }}
+          >
+            <Building size={18} /> Add Client
+          </Button>
+        </div>
       </div>
 
       {/* Role Filter Bar */}
       <div className="glass-card" style={{ display: 'flex', gap: '10px', padding: '10px 14px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        {['ALL', 'ADMIN', 'TEAM_MEMBER'].map((role) => (
+        {['ALL', 'ADMIN', 'TEAM_MEMBER', 'CLIENTS'].map((role) => (
           <button
             key={role}
             onClick={() => setFilterRole(role)}
@@ -788,179 +903,279 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
               cursor: 'pointer',
             }}
           >
-            {role === 'ALL' ? 'All Roles' : role === 'ADMIN' ? 'Administrators' : 'Team Members'}
+            {role === 'ALL' ? 'All Roles' : role === 'ADMIN' ? 'Administrators' : role === 'TEAM_MEMBER' ? 'Team Members' : 'Clients 🏢'}
           </button>
         ))}
       </div>
 
       {/* Main Directory Table */}
       <div className="glass-card" style={{ padding: '24px' }}>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <UsersIcon size={20} color="var(--primary)" /> Registered Members ({filteredUsers.length})
-        </h3>
+        {filterRole === 'CLIENTS' ? (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Building size={20} color="var(--primary)" /> Registered Clients ({clients.length})
+              </h3>
+              <Button size="sm" variant="gradient" onClick={openCreateClientModal}>
+                <Plus size={14} /> Add New Client
+              </Button>
+            </div>
 
-        {isLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-secondary)' }}>
-            <Sparkles className="animate-pulse-glow" size={24} color="var(--primary)" style={{ marginBottom: '10px' }} />
-            <p style={{ fontWeight: 600 }}>Loading user directory...</p>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'var(--bg-card-hover)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                  <th style={{ padding: '14px 16px' }}>Student / Member and Skills</th>
-                  <th style={{ padding: '14px 16px' }}>Project Roles and Assigned Projects</th>
-                  <th style={{ padding: '14px 16px' }}>System Role</th>
-                  <th style={{ padding: '14px 16px' }}>Status</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((u) => {
-                  const initial = u.firstName ? u.firstName.charAt(0).toUpperCase() : 'U';
-                  const lastInitial = u.lastName ? u.lastName.charAt(0).toUpperCase() : '';
-                  return (
-                    <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s ease' }}>
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                          <div
-                            style={avatarStyle}
-                            onClick={() => handleUserClick(u.id)}
-                            title="Click to view Student Dashboard and Skills"
-                          >
-                            {initial + lastInitial}
-                          </div>
-                          <div>
+            {clients.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-secondary)' }}>
+                <Building size={36} color="var(--primary)" style={{ opacity: 0.5, marginBottom: '10px' }} />
+                <p style={{ fontWeight: 600 }}>No registered clients found.</p>
+                <p style={{ fontSize: '0.84rem', marginTop: '4px' }}>Click "+ Add Client" to create your first client record.</p>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--bg-card-hover)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                      <th style={{ padding: '14px 16px' }}>Client Name & Details</th>
+                      <th style={{ padding: '14px 16px' }}>Contact Details</th>
+                      <th style={{ padding: '14px 16px' }}>Referenced By (Person / Teacher)</th>
+                      <th style={{ padding: '14px 16px' }}>Assigned Project(s)</th>
+                      <th style={{ padding: '14px 16px', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clients.map((c) => (
+                      <tr key={c.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <div
-                              style={{ color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                              onClick={() => handleUserClick(u.id)}
-                              title="Click to view Student Performance Dashboard"
+                              style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: 'var(--radius-md)',
+                                backgroundColor: 'var(--primary-light)',
+                                color: 'var(--primary)',
+                                fontWeight: 800,
+                                fontSize: '1.1rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
                             >
-                              {u.firstName} {u.lastName}
-                              <span style={{ fontSize: '0.72rem', opacity: 0.8, color: 'var(--accent-purple)', fontWeight: 800 }}>View Dashboard</span>
+                              🏢
                             </div>
-                            <div style={{ fontSize: '0.80rem', color: 'var(--text-secondary)' }}>{u.email}</div>
+                            <div>
+                              <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.name}</div>
+                              {c.address && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>📍 {c.address}</div>}
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ fontSize: '0.85rem' }}>
+                            {c.phone && <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>📞 {c.phone}</div>}
+                            {c.email && <div style={{ color: 'var(--primary)', marginTop: '2px' }}>✉️ {c.email}</div>}
+                            {!c.phone && !c.email && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Not provided</span>}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          {c.referencePerson ? (
+                            <span style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--primary)' }}>
+                              👨‍🏫 {c.referencePerson}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Not set</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          {c.projects && c.projects.length > 0 ? (
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              {c.projects.map((p) => (
+                                <Badge key={p.id} variant="gradient">
+                                  📂 {p.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No projects assigned</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <Button size="sm" variant="secondary" onClick={() => openEditClientModal(c)} title="Edit Client">
+                              <Edit2 size={14} />
+                            </Button>
+                            <Button size="sm" variant="danger" onClick={() => handleDeleteClient(c.id, c.name)} title="Delete Client">
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <UsersIcon size={20} color="var(--primary)" /> Registered Members ({filteredUsers.length})
+            </h3>
 
-                            {/* Skills pill badges directly below name */}
-                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
-                              {u.skills && u.skills.length > 0 ? (
-                                u.skills.map((sk: any) => (
-                                  <span
-                                    key={sk.id}
+            {isLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-secondary)' }}>
+                <Sparkles className="animate-pulse-glow" size={24} color="var(--primary)" style={{ marginBottom: '10px' }} />
+                <p style={{ fontWeight: 600 }}>Loading user directory...</p>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--bg-card-hover)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                      <th style={{ padding: '14px 16px' }}>Student / Member and Skills</th>
+                      <th style={{ padding: '14px 16px' }}>Project Roles and Assigned Projects</th>
+                      <th style={{ padding: '14px 16px' }}>System Role</th>
+                      <th style={{ padding: '14px 16px' }}>Status</th>
+                      <th style={{ padding: '14px 16px', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((u) => {
+                      const initial = u.firstName ? u.firstName.charAt(0).toUpperCase() : 'U';
+                      const lastInitial = u.lastName ? u.lastName.charAt(0).toUpperCase() : '';
+                      return (
+                        <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s ease' }}>
+                          <td style={{ padding: '14px 16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                              <div
+                                style={avatarStyle}
+                                onClick={() => handleUserClick(u.id)}
+                                title="Click to view Student Dashboard and Skills"
+                              >
+                                {initial + lastInitial}
+                              </div>
+                              <div>
+                                <div
+                                  style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.95rem', cursor: 'pointer' }}
+                                  onClick={() => handleUserClick(u.id)}
+                                >
+                                  {u.firstName} {u.lastName}
+                                  <span style={{ fontSize: '0.78rem', color: 'var(--primary)', marginLeft: '8px', fontWeight: 600 }}>
+                                    View Dashboard
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{u.email}</div>
+                                {u.skills && u.skills.length > 0 && (
+                                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                    {u.skills.slice(0, 4).map((sk) => (
+                                      <span
+                                        key={sk.id}
+                                        style={{
+                                          fontSize: '0.72rem',
+                                          fontWeight: 600,
+                                          color: 'var(--text-muted)',
+                                          backgroundColor: 'var(--bg-main)',
+                                          padding: '2px 8px',
+                                          borderRadius: 'var(--radius-sm)',
+                                        }}
+                                      >
+                                        {sk.skillName}
+                                      </span>
+                                    ))}
+                                    {u.skills.length > 4 && (
+                                      <span style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 700 }}>
+                                        +{u.skills.length - 4} more
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            {u.projectMemberships && u.projectMemberships.length > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {u.projectMemberships.map((pm, i) => (
+                                  <div
+                                    key={i}
                                     style={{
-                                      fontSize: '0.70rem',
-                                      fontWeight: 700,
-                                      padding: '2px 7px',
-                                      borderRadius: 'var(--radius-full)',
-                                      backgroundColor: 'var(--primary-light)',
-                                      color: 'var(--primary)',
+                                      fontSize: '0.82rem',
+                                      fontWeight: 600,
+                                      color: 'var(--text-primary)',
+                                      backgroundColor: 'var(--bg-main)',
+                                      padding: '4px 10px',
+                                      borderRadius: 'var(--radius-sm)',
                                       border: '1px solid var(--border-color)',
                                     }}
                                   >
-                                    {sk.skillName}
-                                  </span>
-                                ))
-                              ) : (
-                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                  Skills: React | Node.js | Database | UI/UX
-                                </span>
+                                    {pm.project.name}{' '}
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>
+                                      ({pm.project.projectType || 'PROJECT'})
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Unassigned</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <Badge variant={u.role === 'ADMIN' ? 'gradient' : 'info'}>{u.role.replace('_', ' ')}</Badge>
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <Badge variant={u.isActive ? 'success' : 'neutral'} pulse={u.isActive}>
+                              {u.isActive ? 'ACTIVE' : 'INACTIVE'}
+                            </Badge>
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleUserClick(u.id)}
+                                title="View Student Dashboard"
+                              >
+                                <LayoutDashboard size={14} />
+                              </Button>
+
+                              <Button size="sm" variant="secondary" onClick={() => handleOpenEdit(u)} title="Edit Details">
+                                <Edit2 size={14} />
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  setResetUserId(u.id);
+                                  setNewResetPassword('');
+                                  setIsResetPassVisible(false);
+                                }}
+                                title="Password Management (View & Change Password)"
+                              >
+                                <KeyRound size={14} />
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant={u.isActive ? 'secondary' : 'gradient'}
+                                onClick={() => toggleUserActive(u)}
+                                title={u.isActive ? 'Deactivate Account' : 'Activate Account'}
+                              >
+                                {u.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
+                              </Button>
+
+                              {u.role !== 'ADMIN' && (
+                                <Button size="sm" variant="danger" onClick={() => setDeletingUserId(u.id)} title="Delete Account">
+                                  <Trash2 size={14} />
+                                </Button>
                               )}
                             </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Assigned Projects and Project Role Column */}
-                      <td style={{ padding: '14px 16px' }}>
-                        {u.projectMemberships && u.projectMemberships.length > 0 ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            {u.projectMemberships.map((pm: any) => (
-                              <span
-                                key={pm.project.id}
-                                style={{
-                                  fontSize: '0.78rem',
-                                  fontWeight: 700,
-                                  color: 'var(--text-primary)',
-                                  backgroundColor: 'var(--bg-main)',
-                                  padding: '4px 10px',
-                                  borderRadius: 'var(--radius-md)',
-                                  border: '1px solid var(--border-color)',
-                                  display: 'inline-block',
-                                }}
-                              >
-                                {pm.project.name} <span style={{ fontSize: '0.70rem', color: 'var(--primary)', marginLeft: '4px' }}>({pm.project.projectType ? pm.project.projectType.replace(/_/g, ' ') : 'Member'})</span>
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: '0.80rem', color: 'var(--text-muted)' }}>No Active Projects</span>
-                        )}
-                      </td>
-
-                      <td style={{ padding: '14px 16px' }}>
-                        <Badge variant={u.role === 'ADMIN' ? 'gradient' : 'info'}>
-                          {u.role === 'ADMIN' ? 'Admin' : 'Team Member'}
-                        </Badge>
-                      </td>
-
-                      <td style={{ padding: '14px 16px' }}>
-                        <Badge variant={u.isActive ? 'success' : 'danger'} pulse={u.isActive}>
-                          {u.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </td>
-
-                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '8px' }}>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => handleUserClick(u.id)}
-                            title="View Student Dashboard"
-                          >
-                            <LayoutDashboard size={14} />
-                          </Button>
-
-                          <Button size="sm" variant="secondary" onClick={() => handleOpenEdit(u)} title="Edit Details">
-                            <Edit2 size={14} />
-                          </Button>
-
-                          {/* Combined View & Change Password Action Button */}
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              setResetUserId(u.id);
-                              setNewResetPassword('');
-                              setIsResetPassVisible(false);
-                            }}
-                            title="Password Management (View & Change Password)"
-                          >
-                            <KeyRound size={14} />
-                          </Button>
-
-                          <Button
-                            size="sm"
-                            variant={u.isActive ? 'secondary' : 'gradient'}
-                            onClick={() => toggleUserActive(u)}
-                            title={u.isActive ? 'Deactivate Account' : 'Activate Account'}
-                          >
-                            {u.isActive ? <UserX size={14} /> : <UserCheck size={14} />}
-                          </Button>
-
-                          {u.role !== 'ADMIN' && (
-                            <Button size="sm" variant="danger" onClick={() => setDeletingUserId(u.id)} title="Delete Account">
-                              <Trash2 size={14} />
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1170,6 +1385,77 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
             </Button>
           </form>
         )}
+      </Modal>
+
+      {/* Register / Edit Client Modal */}
+      <Modal
+        isOpen={isClientModalOpen}
+        onClose={() => setIsClientModalOpen(false)}
+        title={editingClient ? 'Edit Client Record' : 'Register New Client'}
+        maxWidth="620px"
+      >
+        <form onSubmit={handleSaveClient} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Input
+            label="🏢 Client Name *"
+            placeholder="e.g. Acme Corporations / Oxford College"
+            value={cName}
+            onChange={(e) => setCName(e.target.value)}
+            required
+          />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <Input
+              label="📞 Mobile No (Optional)"
+              placeholder="e.g. 9876543210"
+              value={cPhone}
+              onChange={(e) => setCPhone(e.target.value)}
+            />
+            <Input
+              label="✉️ Email ID (Optional)"
+              type="email"
+              placeholder="e.g. contact@acme.com"
+              value={cEmail}
+              onChange={(e) => setCEmail(e.target.value)}
+            />
+          </div>
+
+          <Input
+            label="📍 Client Address (Optional)"
+            placeholder="e.g. Building 4, Tech Park, Mumbai"
+            value={cAddress}
+            onChange={(e) => setCAddress(e.target.value)}
+          />
+
+          <Input
+            label="👨‍🏫 Referred By / Reference Person or Teacher (Optional)"
+            placeholder="e.g. Dr. Sharma / Prof. Kulkarni"
+            value={cReferencePerson}
+            onChange={(e) => setCReferencePerson(e.target.value)}
+            helperText="Person or faculty member who referred this client"
+          />
+
+          <Select
+            label="📂 Assign Project (Optional)"
+            value={cProjectId}
+            onChange={(e) => setCProjectId(e.target.value)}
+            options={[
+              { value: '', label: 'None (Unassigned)' },
+              ...projects.map((p) => ({
+                value: p.id,
+                label: `${p.name} (${p.status})`,
+              })),
+            ]}
+          />
+
+          <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+            <Button variant="gradient" type="submit" isLoading={isSavingClient} disabled={isSavingClient} style={{ flex: 1 }}>
+              {editingClient ? 'Save Client Details' : 'Register Client'}
+            </Button>
+            <Button variant="secondary" type="button" onClick={() => setIsClientModalOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

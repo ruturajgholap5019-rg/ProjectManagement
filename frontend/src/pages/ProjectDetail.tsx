@@ -38,7 +38,19 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
   const [editDescription, setEditDescription] = useState('');
   const [editStartDate, setEditStartDate] = useState('');
   const [editTargetEndDate, setEditTargetEndDate] = useState('');
+  const [editClientId, setEditClientId] = useState('');
+  const [editReferencePerson, setEditReferencePerson] = useState('');
+  const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
   const [isSavingProject, setIsSavingProject] = useState(false);
+
+  const fetchClientsList = async () => {
+    try {
+      const data = await apiFetch<{ id: string; name: string }[]>('/clients');
+      setClientsList(data);
+    } catch {
+      // Ignore
+    }
+  };
 
   const openEditModal = () => {
     if (!project) return;
@@ -49,6 +61,9 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     setEditDescription(project.description || '');
     setEditStartDate(project.startDate ? new Date(project.startDate).toISOString().slice(0, 10) : '');
     setEditTargetEndDate(project.targetEndDate ? new Date(project.targetEndDate).toISOString().slice(0, 10) : '');
+    setEditClientId(project.clientId || project.client?.id || '');
+    setEditReferencePerson(project.referencePerson || project.client?.referencePerson || '');
+    fetchClientsList();
     setIsEditProjectOpen(true);
   };
 
@@ -64,6 +79,8 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
           priority: editPriority,
           scope: editScope,
           description: editDescription,
+          clientId: editClientId || null,
+          referencePerson: editReferencePerson.trim() || null,
           startDate: editStartDate || null,
           targetEndDate: editTargetEndDate || null,
         }),
@@ -595,13 +612,43 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
                 <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                   <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>👨‍🏫 Assigned By / Supervisor</div>
-                  <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--primary)' }}>
                     {project.creator ? `${project.creator.firstName} ${project.creator.lastName} (${project.creator.role})` : 'System Admin'}
                   </div>
                 </div>
 
                 <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>🏷️ Category / Client Domain</div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>🏢 Client Details</div>
+                  <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {project.client ? (
+                      <div>
+                        <div>🏢 {project.client.name}</div>
+                        {(project.client.phone || project.client.email) && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500, marginTop: '2px' }}>
+                            {project.client.phone && <span>📞 {project.client.phone} </span>}
+                            {project.client.email && <span>✉️ {project.client.email}</span>}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      'Internal Project (No Client)'
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>👨‍🏫 Referenced By (Person / Teacher)</div>
+                  <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--primary)' }}>
+                    {project.referencePerson || project.client?.referencePerson ? (
+                      <span>👨‍🏫 {project.referencePerson || project.client?.referencePerson}</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Not set</span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>🏷️ Category / Domain</div>
                   <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                     {project.projectType ? project.projectType.replace(/_/g, ' ') : 'General Deliverable'}
                   </div>
@@ -1145,6 +1192,27 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
               label: `${c.icon || '📁'} ${c.name}`,
             }))}
           />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <Select
+              label="🏢 Client (Optional)"
+              value={editClientId}
+              onChange={(e) => setEditClientId(e.target.value)}
+              options={[
+                { value: '', label: 'None (Internal / No Client)' },
+                ...clientsList.map((c) => ({
+                  value: c.id,
+                  label: `🏢 ${c.name}`,
+                })),
+              ]}
+            />
+            <Input
+              label="👨‍🏫 Referred By (Person / Teacher)"
+              placeholder="e.g. Dr. Sharma / Prof. Kulkarni"
+              value={editReferencePerson}
+              onChange={(e) => setEditReferencePerson(e.target.value)}
+            />
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <Input
