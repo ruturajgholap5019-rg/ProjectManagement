@@ -7,7 +7,7 @@ import { Button } from '../components/UI/Button';
 import { Input, Select, TextArea } from '../components/UI/Input';
 import { Modal } from '../components/UI/Modal';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
-import { Download, Plus, Search, Clock, Sparkles, FileText, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
+import { Download, Plus, Clock, Sparkles, FileText, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
 
 interface WorkActivityItem {
   id: string;
@@ -28,9 +28,6 @@ export const WorkActivitiesPage: React.FC = () => {
   const [activities, setActivities] = useState<WorkActivityItem[]>([]);
   const [totalHours, setTotalHours] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Filters
-  const [search, setSearch] = useState<string>('');
 
   // Log Activity Modal
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -111,8 +108,6 @@ export const WorkActivitiesPage: React.FC = () => {
         if (globalFilter.startDate) params.append('startDate', globalFilter.startDate);
         if (globalFilter.endDate) params.append('endDate', globalFilter.endDate);
       }
-      if (search) params.append('search', search);
-
       const res = await apiFetch<any>(`/activities?${params.toString()}`);
       setActivities(res.activities || []);
       setTotalHours(res.totalHours || 0);
@@ -190,13 +185,6 @@ export const WorkActivitiesPage: React.FC = () => {
     if (selectedCategory && act.project?.projectType !== selectedCategory) {
       return false;
     }
-    if (search.trim()) {
-      const q = search.toLowerCase().trim();
-      const matchesDesc = act.workDescription ? act.workDescription.toLowerCase().includes(q) : false;
-      const matchesProj = act.project?.name ? act.project.name.toLowerCase().includes(q) : false;
-      const matchesUser = act.user ? `${act.user.firstName} ${act.user.lastName}`.toLowerCase().includes(q) : false;
-      if (!matchesDesc && !matchesProj && !matchesUser) return false;
-    }
     return true;
   });
 
@@ -231,47 +219,33 @@ export const WorkActivitiesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Options Glass Bar */}
-      <div className="glass-card" style={{ padding: '16px 20px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '240px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Search size={18} color="var(--text-muted)" />
-          <input
-            type="text"
-            placeholder="Search activities by description, project, or member name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchActivities()}
-            style={{
-              width: '100%',
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: 'var(--text-primary)',
-              fontSize: '0.92rem',
-              outline: 'none',
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Quick Summary Banner */}
-      <div className="glass-card" style={{ padding: '20px 24px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '18px', background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--primary-light) 100%)' }}>
-        <div style={{ width: '46px', height: '46px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Clock size={24} />
-        </div>
-        <div>
-          <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Time Recorded</div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-            {totalHours.toFixed(1)} Hours <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>({filteredActivities.length} activity logs)</span>
-          </div>
-        </div>
-      </div>
-
       {/* Internal Work Activity Table */}
       <div className="glass-card" style={{ padding: '28px', overflow: 'hidden' }}>
-        <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <FileText size={20} color="var(--primary)" />
-          Activity Log Records
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <FileText size={20} color="var(--primary)" />
+            Activity Log Records
+          </h3>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-full)',
+              backgroundColor: 'var(--primary-light)',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <Clock size={16} color="var(--primary)" />
+            <span style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Time Logged:</span>
+            <strong style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary)' }}>
+              {totalHours.toFixed(1)} Hours
+            </strong>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>({filteredActivities.length} logs)</span>
+          </div>
+        </div>
 
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-secondary)' }}>
