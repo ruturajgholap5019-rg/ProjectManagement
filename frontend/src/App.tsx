@@ -14,9 +14,10 @@ import { StudentProfilePage } from './pages/StudentProfile';
 import { MyAccountPage } from './pages/MyAccount';
 import { useDateFilterStore } from './store/dateFilterStore';
 import { useCategoryFilterStore } from './store/categoryFilterStore';
+import { CategoryManagerModal } from './components/UI/CategoryManagerModal';
 import { apiFetch } from './services/api';
 import { ToastProvider } from './context/ToastContext';
-import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun, Moon, FileText, Search, Bell, X, User as UserIcon, Menu } from 'lucide-react';
+import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun, Moon, FileText, Search, Bell, X, User as UserIcon, Menu, Settings } from 'lucide-react';
 
 type TabType = 'dashboard' | 'projects' | 'activities' | 'search' | 'tasks' | 'users' | 'students' | 'account';
 
@@ -24,7 +25,9 @@ export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, refreshSession, logout } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
   const { rangeType, startDate, endDate, setDateRange } = useDateFilterStore();
-  const { selectedCategory, setSelectedCategory } = useCategoryFilterStore();
+  const { selectedCategory, setSelectedCategory, categories, fetchCategories } = useCategoryFilterStore();
+
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -212,6 +215,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) {
       fetchNotifications();
+      fetchCategories();
     }
   }, [isAuthenticated]);
 
@@ -467,18 +471,15 @@ export const App: React.FC = () => {
             
             <select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as any)}
+              onChange={(e) => setSelectedCategory(e.target.value)}
               style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-main)', color: 'var(--text-primary)', fontSize: '0.84rem', fontWeight: 700, outline: 'none' }}
             >
               <option value="">📂 All Project Categories</option>
-              <option value="WEBSITE_WEBAPP">💻 Website / Web App</option>
-              <option value="MOBILE_APP">📱 Mobile Application</option>
-              <option value="BMS">🏢 Enterprise System (BMS)</option>
-              <option value="UNIVERSITY_NEP">🎓 University / NEP Platform</option>
-              <option value="DESIGN_SOCIAL_MEDIA">🎨 Design & Social Media</option>
-              <option value="PODCAST_MEDIA">🎙️ Podcast & Media</option>
-              <option value="RESEARCH">🔬 Digital Research</option>
-              <option value="OTHER">📂 Other Projects</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.code}>
+                  {c.icon || '📁'} {c.name}
+                </option>
+              ))}
             </select>
 
             <select
@@ -684,7 +685,7 @@ export const App: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <select
                   value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value as any)}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
                   style={{
                     backgroundColor: selectedCategory ? 'var(--primary-light)' : 'var(--bg-card)',
                     border: selectedCategory ? '1px solid var(--primary)' : '1px solid var(--border-color)',
@@ -701,15 +702,36 @@ export const App: React.FC = () => {
                   title="Filter entire application by Project Category"
                 >
                   <option value="">📂 All Project Categories</option>
-                  <option value="WEBSITE_WEBAPP">💻 Website / Web App</option>
-                  <option value="MOBILE_APP">📱 Mobile Application</option>
-                  <option value="BMS">🏢 Enterprise System (BMS)</option>
-                  <option value="UNIVERSITY_NEP">🎓 University / NEP Platform</option>
-                  <option value="DESIGN_SOCIAL_MEDIA">🎨 Design & Social Media</option>
-                  <option value="PODCAST_MEDIA">🎙️ Podcast & Media</option>
-                  <option value="RESEARCH">🔬 Digital Research</option>
-                  <option value="OTHER">📂 Other Projects</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.code}>
+                      {c.icon || '📁'} {c.name}
+                    </option>
+                  ))}
                 </select>
+
+                {user?.role === 'ADMIN' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryModalOpen(true)}
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      padding: '6px 12px',
+                      borderRadius: 'var(--radius-full)',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.2s ease',
+                    }}
+                    title="Admin: Create, Edit & Delete Project Categories"
+                  >
+                    <Settings size={14} color="var(--primary)" /> Categories
+                  </button>
+                )}
               </div>
 
               {/* Global Navbar Date Range Selector */}
@@ -915,6 +937,8 @@ export const App: React.FC = () => {
           </main>
         </div>
       </div>
+
+      <CategoryManagerModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} />
     </ToastProvider>
   );
 };

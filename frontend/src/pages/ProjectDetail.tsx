@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { useCategoryFilterStore } from '../store/categoryFilterStore';
 import { Button } from '../components/UI/Button';
 import { Select, TextArea, Input } from '../components/UI/Input';
 import { Modal } from '../components/UI/Modal';
@@ -17,6 +18,7 @@ interface ProjectDetailProps {
 
 export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onBack, onToggleFullScreenForm }) => {
   const user = useAuthStore((state) => state.user);
+  const { categories } = useCategoryFilterStore();
 
   const [project, setProject] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
@@ -1138,16 +1140,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
             label="Project Type / Category"
             value={editProjectType}
             onChange={(e) => setEditProjectType(e.target.value)}
-            options={[
-              { value: 'WEBSITE_WEBAPP', label: 'Website / Web Application' },
-              { value: 'MOBILE_APP', label: 'Mobile Application' },
-              { value: 'BMS', label: 'Building / Enterprise Management System (BMS)' },
-              { value: 'UNIVERSITY_NEP', label: 'University / NEP Platform' },
-              { value: 'DESIGN_SOCIAL_MEDIA', label: 'Design & Social Media Campaign' },
-              { value: 'PODCAST_MEDIA', label: 'Podcast & Media Production' },
-              { value: 'RESEARCH', label: 'Digital Research' },
-              { value: 'OTHER', label: 'Other Project' },
-            ]}
+            options={categories.map((c) => ({
+              value: c.code,
+              label: `${c.icon || '📁'} ${c.name}`,
+            }))}
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>

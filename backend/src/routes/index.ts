@@ -13,6 +13,7 @@ import { authenticate } from '../middlewares/auth.middleware.js';
 import { requireRoles } from '../middlewares/rbac.middleware.js';
 import { UserRole } from '../types/enums.js';
 import reportRouter from '../modules/reports/report.routes.js';
+import categoryRouter from '../modules/categories/category.routes.js';
 
 const router = Router();
 
@@ -78,8 +79,9 @@ router.use('/skills', skillRouter);
 router.use('/', notificationRouter);
 
 // ----------------------------------------------------------------------------
-// REPORTS ROUTES (/api/v1/reports)
+// REPORTS & CATEGORIES ROUTES
 // ----------------------------------------------------------------------------
 router.use('/reports', reportRouter);
+router.use('/categories', categoryRouter);
 
 export default router;

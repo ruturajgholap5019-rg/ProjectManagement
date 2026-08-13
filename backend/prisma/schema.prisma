@@ -351,3 +351,20 @@ model ActivityLog {
   @@index([taskId, createdAt])
   @@map("activity_logs")
 }
+
+// ============================================================================
+// TABLE: project_categories
+// ============================================================================
+
+model ProjectCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  icon        String   @default("📁")
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("project_categories")
+}

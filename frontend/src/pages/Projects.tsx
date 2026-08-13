@@ -37,7 +37,7 @@ interface ProjectsPageProps {
 
 export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onToggleFullScreenForm }) => {
   const user = useAuthStore((state) => state.user);
-  const { selectedCategory } = useCategoryFilterStore();
+  const { selectedCategory, categories } = useCategoryFilterStore();
 
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -222,16 +222,10 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
                 label="Project Type / Category"
                 value={projectType}
                 onChange={(e) => setProjectType(e.target.value)}
-                options={[
-                  { value: 'WEBSITE_WEBAPP', label: 'Website / Web Application' },
-                  { value: 'MOBILE_APP', label: 'Mobile Application' },
-                  { value: 'BMS', label: 'Building / Enterprise Management System (BMS)' },
-                  { value: 'UNIVERSITY_NEP', label: 'University / NEP Platform' },
-                  { value: 'DESIGN_SOCIAL_MEDIA', label: 'Design & Social Media Campaign' },
-                  { value: 'PODCAST_MEDIA', label: 'Podcast & Media Production' },
-                  { value: 'RESEARCH', label: 'Digital Research' },
-                  { value: 'OTHER', label: 'Other Project' },
-                ]}
+                options={categories.map((c) => ({
+                  value: c.code,
+                  label: `${c.icon || '📁'} ${c.name}`,
+                }))}
               />
             </div>
 
