@@ -258,17 +258,17 @@ export const WorkActivitiesPage: React.FC = () => {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ backgroundColor: 'var(--bg-card-hover)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                  <th style={{ padding: '14px 16px', minWidth: '100px' }}>Serial No</th>
-                  <th style={{ padding: '14px 16px', minWidth: '170px' }}>Date & Time</th>
-                  <th style={{ padding: '14px 16px', minWidth: '200px' }}>Team Member</th>
-                  <th style={{ padding: '14px 16px', minWidth: '220px' }}>Project Name</th>
-                  <th style={{ padding: '14px 16px', minWidth: '320px' }}>Work Description</th>
-                  <th style={{ padding: '14px 16px', minWidth: '130px', textAlign: 'center' }}>Hours Spent</th>
-                  <th style={{ padding: '14px 16px', minWidth: '160px' }}>Assigned By</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'right', minWidth: '110px' }}>Actions</th>
+                  <th style={{ padding: '12px 14px', width: '80px' }}>Serial No</th>
+                  <th style={{ padding: '12px 14px', width: '140px' }}>Date & Time</th>
+                  <th style={{ padding: '12px 14px', width: '160px' }}>Team Member</th>
+                  <th style={{ padding: '12px 14px', width: '180px' }}>Project Name</th>
+                  <th style={{ padding: '12px 14px' }}>Work Description</th>
+                  <th style={{ padding: '12px 14px', width: '110px', textAlign: 'center' }}>Hours Spent</th>
+                  <th style={{ padding: '12px 14px', width: '140px' }}>Assigned By</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'right', width: '150px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -276,12 +276,12 @@ export const WorkActivitiesPage: React.FC = () => {
                   const canManage = user?.role === 'ADMIN' || a.user.id === user?.id;
                   return (
                     <tr key={a.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s ease' }}>
-                      <td style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 800 }}>#{a.serialNo}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>
+                      <td style={{ padding: '12px 14px', color: 'var(--primary)', fontWeight: 800 }}>#{a.serialNo}</td>
+                      <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>
                         {new Date(a.dateTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                       </td>
                       <td
-                        style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ padding: '12px 14px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
                         onClick={() => {
                           window.history.pushState({}, '', `/students/${a.user.id}`);
                           window.dispatchEvent(new Event('popstate'));
@@ -292,7 +292,7 @@ export const WorkActivitiesPage: React.FC = () => {
                         </span>
                       </td>
                       <td
-                        style={{ padding: '14px 16px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ padding: '12px 14px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
                         onClick={() => {
                           window.history.pushState({}, '', `/projects/${a.project.id}`);
                           window.dispatchEvent(new Event('popstate'));
@@ -302,23 +302,35 @@ export const WorkActivitiesPage: React.FC = () => {
                           {a.project.name} <ArrowUpRight size={13} color="var(--text-muted)" />
                         </span>
                       </td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                      <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
                         {a.workDescription}
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 800, color: 'var(--text-primary)' }}>
                         {a.hoursSpent} hrs
                       </td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-muted)' }}>
+                      <td style={{ padding: '12px 14px', color: 'var(--text-muted)' }}>
                         {a.assignedBy ? `${a.assignedBy.firstName} ${a.assignedBy.lastName}` : 'Admin'}
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {canManage ? (
-                          <div style={{ display: 'inline-flex', gap: '6px' }}>
-                            <Button size="sm" variant="secondary" onClick={() => openEditModal(a)} title="Edit Activity Log">
-                              <Edit2 size={14} />
+                          <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'flex-end' }}>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => openEditModal(a)}
+                              title="Edit Activity Log"
+                              style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <Edit2 size={13} /> Edit
                             </Button>
-                            <Button size="sm" variant="danger" onClick={() => setDeletingActivityId(a.id)} title="Delete Activity Log">
-                              <Trash2 size={14} />
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => setDeletingActivityId(a.id)}
+                              title="Delete Activity Log"
+                              style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <Trash2 size={13} /> Delete
                             </Button>
                           </div>
                         ) : (
