@@ -5,7 +5,7 @@ import { useCategoryFilterStore } from '../store/categoryFilterStore';
 import { Button } from '../components/UI/Button';
 import { Input, Select, TextArea } from '../components/UI/Input';
 import { Badge } from '../components/UI/Badge';
-import { FolderPlus, Search, Users, CheckCircle2, User as UserIcon, Sparkles, Layers, X, ArrowLeft } from 'lucide-react';
+import { FolderPlus, Search, Users, CheckCircle2, User as UserIcon, Sparkles, Layers, X, ArrowLeft, Settings } from 'lucide-react';
 
 interface ProjectItem {
   id: string;
@@ -33,9 +33,10 @@ interface UserOption {
 interface ProjectsPageProps {
   onSelectProject?: (id: string) => void;
   onToggleFullScreenForm?: (active: boolean) => void;
+  onOpenCategoryManager?: () => void;
 }
 
-export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onToggleFullScreenForm }) => {
+export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onToggleFullScreenForm, onOpenCategoryManager }) => {
   const user = useAuthStore((state) => state.user);
   const { selectedCategory, categories } = useCategoryFilterStore();
 
@@ -328,10 +329,17 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
           </p>
         </div>
         {user?.role === 'ADMIN' && (
-          <Button variant="gradient" onClick={openCreateForm}>
-            <FolderPlus size={18} />
-            Create & Assign Project
-          </Button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+            <Button variant="gradient" onClick={openCreateForm}>
+              <FolderPlus size={18} />
+              Create & Assign Project
+            </Button>
+            {onOpenCategoryManager && (
+              <Button size="sm" variant="secondary" onClick={onOpenCategoryManager} style={{ fontSize: '0.82rem' }}>
+                <Settings size={14} color="var(--primary)" /> Manage Project Categories
+              </Button>
+            )}
+          </div>
         )}
       </div>
 

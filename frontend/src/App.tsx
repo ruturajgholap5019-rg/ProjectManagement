@@ -17,7 +17,7 @@ import { useCategoryFilterStore } from './store/categoryFilterStore';
 import { CategoryManagerModal } from './components/UI/CategoryManagerModal';
 import { apiFetch } from './services/api';
 import { ToastProvider } from './context/ToastContext';
-import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun, Moon, FileText, Search, Bell, X, User as UserIcon, Menu, Settings } from 'lucide-react';
+import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun, Moon, FileText, Search, Bell, X, User as UserIcon, Menu } from 'lucide-react';
 
 type TabType = 'dashboard' | 'projects' | 'activities' | 'search' | 'tasks' | 'users' | 'students' | 'account';
 
@@ -708,30 +708,6 @@ export const App: React.FC = () => {
                     </option>
                   ))}
                 </select>
-
-                {user?.role === 'ADMIN' && (
-                  <button
-                    type="button"
-                    onClick={() => setIsCategoryModalOpen(true)}
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)',
-                      padding: '6px 12px',
-                      borderRadius: 'var(--radius-full)',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      transition: 'all 0.2s ease',
-                    }}
-                    title="Admin: Create, Edit & Delete Project Categories"
-                  >
-                    <Settings size={14} color="var(--primary)" /> Categories
-                  </button>
-                )}
               </div>
 
               {/* Global Navbar Date Range Selector */}
@@ -908,6 +884,7 @@ export const App: React.FC = () => {
               <ProjectsPage
                 onSelectProject={(id) => navigateTo('projects', id)}
                 onToggleFullScreenForm={setIsFullScreenFormActive}
+                onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
               />
             )}
             {activeTab === 'projects' && selectedProjectId && (
