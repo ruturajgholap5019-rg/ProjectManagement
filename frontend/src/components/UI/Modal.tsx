@@ -38,10 +38,11 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     backdropFilter: 'blur(16px)',
     WebkitBackdropFilter: 'blur(16px)',
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
     zIndex: 9999999,
-    padding: '24px',
+    padding: '60px 24px 24px',
+    overflowY: 'auto',
   };
 
   const dialogStyle: React.CSSProperties = {
@@ -50,11 +51,11 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     borderRadius: 'var(--radius-lg)',
     width: '100%',
     maxWidth: maxWidth,
-    maxHeight: '92vh',
     display: 'flex',
     flexDirection: 'column',
     boxShadow: '0 24px 60px -12px rgba(0, 0, 0, 0.5), 0 0 45px rgba(99, 102, 241, 0.25)',
     overflow: 'hidden',
+    marginBottom: '24px',
   };
 
   const headerStyle: React.CSSProperties = {
@@ -84,7 +85,6 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
 
   const bodyStyle: React.CSSProperties = {
     padding: '26px 30px',
-    overflowY: 'auto',
     flex: 1,
   };
 

@@ -101,31 +101,81 @@ class EmailService {
   }
 
   async sendWelcomeAccountEmail(toEmail: string, studentName: string, tempPassword: string, role: string) {
+    const siteUrl = process.env.WEBSITE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+    const displayRole = role === 'ADMIN' ? 'Administrator' : role === 'PROJECT_LEAD' ? 'Project Lead' : 'Team Member';
     const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-        <h2 style="color: #4f46e5; margin-top: 0;">🚀 Welcome to Digital Project Tracker Portal</h2>
-        <p>Hello <strong>${studentName}</strong>,</p>
-        <p>Your team member account has been registered by the Organization Admin. Below are your login credentials to access the Project Tracker platform:</p>
-        
-        <div style="background-color: #f8fafc; padding: 18px; border-radius: 8px; border-left: 4px solid #4f46e5; margin: 20px 0; font-size: 14px;">
-          <p style="margin: 0 0 10px 0; color: #0f172a;"><strong>Registered Email:</strong> <span style="color: #4f46e5;">${toEmail}</span></p>
-          <p style="margin: 0 0 10px 0; color: #0f172a;"><strong>Temporary Password:</strong> <code style="background-color: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px; font-weight: bold;">${tempPassword}</code></p>
-          <p style="margin: 0; color: #0f172a;"><strong>Account Role:</strong> ${role}</p>
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 620px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+        <!-- Header Banner -->
+        <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 36px 32px; text-align: center;">
+          <div style="font-size: 40px; margin-bottom: 10px;">🚀</div>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">Welcome to Project Tracker!</h1>
+          <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0 0; font-size: 15px;">Your account has been created by the organization admin</p>
         </div>
 
-        <p style="color: #475569; font-size: 13px;">
-          ⚠️ <em>Security Notice: You will be required to change this temporary password upon your first login to secure your account.</em>
-        </p>
+        <!-- Body -->
+        <div style="padding: 32px;">
+          <p style="font-size: 16px; color: #1e293b; margin: 0 0 16px 0;">Hello, <strong>${studentName}</strong> 👋</p>
+          <p style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 24px 0;">
+            Your account has been registered on the <strong>VSS Digital Team Project Tracker</strong> platform. 
+            You can use the credentials below to login and start collaborating on projects.
+          </p>
 
-        <div style="margin-top: 24px;">
-          <a href="http://localhost:5173" style="display: inline-block; background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-            Login to Project Tracker
-          </a>
+          <!-- Credentials Box -->
+          <div style="background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%); border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+            <h3 style="margin: 0 0 16px 0; color: #1e293b; font-size: 15px; font-weight: 700; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">🔐 Your Login Credentials</h3>
+            
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-size: 13px; width: 130px; font-weight: 600;">🌐 Portal URL</td>
+                <td style="padding: 8px 0;">
+                  <a href="${siteUrl}" style="color: #4f46e5; font-weight: 700; font-size: 14px; text-decoration: none;">${siteUrl}</a>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-size: 13px; font-weight: 600;">📧 Login Email</td>
+                <td style="padding: 8px 0; color: #1e293b; font-weight: 700; font-size: 14px;">${toEmail}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-size: 13px; font-weight: 600;">🔑 Temp Password</td>
+                <td style="padding: 8px 0;">
+                  <code style="background: #e0e7ff; color: #3730a3; padding: 4px 12px; border-radius: 6px; font-size: 15px; font-weight: 800; letter-spacing: 1px;">${tempPassword}</code>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; font-size: 13px; font-weight: 600;">👤 Account Role</td>
+                <td style="padding: 8px 0; color: #1e293b; font-weight: 600; font-size: 14px;">${displayRole}</td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Security Notice -->
+          <div style="background: #fff7ed; border-left: 4px solid #f97316; border-radius: 8px; padding: 14px 16px; margin-bottom: 24px;">
+            <p style="margin: 0; color: #9a3412; font-size: 13px; line-height: 1.5;">
+              ⚠️ <strong>Security Notice:</strong> This is a temporary password. Please change it from 
+              <em>My Account → Change Password</em> after your first login to keep your account secure.
+            </p>
+          </div>
+
+          <!-- CTA Button -->
+          <div style="text-align: center; margin-bottom: 24px;">
+            <a href="${siteUrl}" style="display: inline-block; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; padding: 14px 36px; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 12px rgba(79,70,229,0.35);">
+              Login to Project Tracker →
+            </a>
+          </div>
+
+          <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+            If you have any issues logging in, please contact your organization admin.
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background: #f8fafc; padding: 16px 32px; text-align: center; border-top: 1px solid #e2e8f0;">
+          <p style="margin: 0; color: #94a3b8; font-size: 12px;">VSS Digital Team — Project Tracker Portal · Automated notification — please do not reply</p>
         </div>
       </div>
     `;
 
-    await this.sendEmail(toEmail, `Welcome to Project Tracker - Account Credentials`, html);
+    await this.sendEmail(toEmail, `🚀 Welcome to Project Tracker — Your Account Credentials`, html);
   }
 
   async sendPasswordResetEmail(toEmail: string, studentName: string, newTempPassword: string) {

@@ -236,6 +236,9 @@ export class ProjectService {
         lead: {
           select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true },
         },
+        creator: {
+          select: { id: true, firstName: true, lastName: true, email: true, role: true },
+        },
         previousLead: {
           select: { id: true, firstName: true, lastName: true, email: true },
         },

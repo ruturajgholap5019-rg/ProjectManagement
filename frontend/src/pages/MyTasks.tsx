@@ -661,11 +661,11 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
       )}
 
       {/* Edit Task Modal (For Admin & Project Lead) */}
-      <Modal isOpen={Boolean(editingTask)} onClose={() => setEditingTask(null)} title="Edit Task Details">
+      <Modal isOpen={Boolean(editingTask)} onClose={() => setEditingTask(null)} title="Edit Task Details" maxWidth="680px">
         {editingTask && (
           <form onSubmit={handleSaveEditTask} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <Input label="Task Title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
-            <TextArea label="Description (Optional)" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+            <TextArea label="Description (Optional)" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} />
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <Select
@@ -682,8 +682,16 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
               <Input label="Due Date (Optional)" type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
             </div>
 
+            {/* Current Task Info (read-only context) */}
+            <div style={{ background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', padding: '14px 16px', border: '1px solid var(--border-color)', fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+              <span><strong>Project:</strong> {editingTask.project?.name || '—'}</span>
+              {editingTask.milestone && <span><strong>Milestone:</strong> {editingTask.milestone.name}</span>}
+              <span><strong>Current Status:</strong> {editingTask.status.replace(/_/g, ' ')}</span>
+              {editingTask.assignee && <span><strong>Assignee:</strong> {editingTask.assignee.firstName} {editingTask.assignee.lastName}</span>}
+            </div>
+
             <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-              <Button variant="gradient" type="submit" isLoading={isSavingTask} style={{ flex: 1 }}>
+              <Button variant="gradient" type="submit" isLoading={isSavingTask} disabled={isSavingTask} style={{ flex: 1 }}>
                 Save Task Changes
               </Button>
               <Button variant="secondary" type="button" onClick={() => setEditingTask(null)}>

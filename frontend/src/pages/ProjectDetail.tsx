@@ -562,18 +562,64 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       {/* Overview Tab */}
       {activeTab === 'overview' && (
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '28px' }}>
-          <div className="glass-card" style={{ padding: '28px' }}>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '14px' }}>Project Scope & Deliverables</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.96rem', lineHeight: '1.6' }}>
-              {project.scope || project.description || 'No detailed scope provided.'}
-            </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Key Metadata Card */}
+            <div className="glass-card" style={{ padding: '24px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={18} color="var(--primary)" />
+                Project Information & Key Dates
+              </h3>
 
-            {project.description && project.scope && (
-              <>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '24px', marginBottom: '10px' }}>Background Description</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: '1.6' }}>{project.description}</p>
-              </>
-            )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>📅 Started Date</div>
+                  <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {project.startDate ? new Date(project.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not set'}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>🎯 Target Delivery Date</div>
+                  <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {project.targetEndDate ? new Date(project.targetEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not set'}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>👨‍🏫 Assigned By / Supervisor</div>
+                  <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {project.creator ? `${project.creator.firstName} ${project.creator.lastName} (${project.creator.role})` : 'System Admin'}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--bg-main)', padding: '14px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>🏷️ Category / Client Domain</div>
+                  <div style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {project.projectType ? project.projectType.replace(/_/g, ' ') : 'General Deliverable'}
+                  </div>
+                </div>
+              </div>
+
+              {project.maintenanceRequired && (
+                <div style={{ marginTop: '16px', padding: '12px 16px', background: 'rgba(99, 102, 241, 0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(99, 102, 241, 0.2)', fontSize: '0.88rem' }}>
+                  <strong>🔧 Maintenance Notes:</strong> {project.maintenanceNotes || 'Ongoing maintenance required.'}
+                </div>
+              )}
+            </div>
+
+            <div className="glass-card" style={{ padding: '28px' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '14px' }}>Project Scope & Deliverables</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.96rem', lineHeight: '1.6' }}>
+                {project.scope || project.description || 'No detailed scope provided.'}
+              </p>
+
+              {project.description && project.scope && (
+                <>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '24px', marginBottom: '10px' }}>Background Description</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: '1.6' }}>{project.description}</p>
+                </>
+              )}
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
