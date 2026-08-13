@@ -189,7 +189,7 @@ export const WorkActivitiesPage: React.FC = () => {
   });
 
   return (
-    <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '1280px', margin: '0 auto' }}>
+    <div className="animate-fade-in" style={{ padding: '32px 36px', width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
@@ -220,7 +220,7 @@ export const WorkActivitiesPage: React.FC = () => {
       </div>
 
       {/* Internal Work Activity Table */}
-      <div className="glass-card" style={{ padding: '28px', overflow: 'hidden' }}>
+      <div className="glass-card" style={{ padding: '28px', overflow: 'hidden', width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <FileText size={20} color="var(--primary)" />
@@ -257,18 +257,18 @@ export const WorkActivitiesPage: React.FC = () => {
             No work activity logs match the selected category or filter.
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', width: '100%' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ backgroundColor: 'var(--bg-card-hover)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                   <th style={{ padding: '12px 14px', width: '80px' }}>Serial No</th>
                   <th style={{ padding: '12px 14px', width: '140px' }}>Date & Time</th>
                   <th style={{ padding: '12px 14px', width: '160px' }}>Team Member</th>
-                  <th style={{ padding: '12px 14px', width: '180px' }}>Project Name</th>
+                  <th style={{ padding: '12px 14px', width: '200px' }}>Project Name</th>
                   <th style={{ padding: '12px 14px' }}>Work Description</th>
                   <th style={{ padding: '12px 14px', width: '110px', textAlign: 'center' }}>Hours Spent</th>
                   <th style={{ padding: '12px 14px', width: '140px' }}>Assigned By</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right', width: '150px' }}>Actions</th>
+                  <th style={{ padding: '12px 14px', textAlign: 'right', width: '80px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -313,25 +313,47 @@ export const WorkActivitiesPage: React.FC = () => {
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {canManage ? (
-                          <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'flex-end' }}>
-                            <Button
-                              size="sm"
-                              variant="secondary"
+                          <div style={{ display: 'inline-flex', gap: '4px', justifyContent: 'flex-end' }}>
+                            <button
                               onClick={() => openEditModal(a)}
                               title="Edit Activity Log"
-                              style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '6px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                color: 'var(--primary)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'background-color 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--primary-light)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                             >
-                              <Edit2 size={13} /> Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger"
+                              <Edit2 size={16} />
+                            </button>
+                            <button
                               onClick={() => setDeletingActivityId(a.id)}
                               title="Delete Activity Log"
-                              style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '6px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                color: '#ef4444',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'background-color 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fee2e2')}
+                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                             >
-                              <Trash2 size={13} /> Delete
-                            </Button>
+                              <Trash2 size={16} />
+                            </button>
                           </div>
                         ) : (
                           <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>View Only</span>
