@@ -98,7 +98,9 @@ export const WorkActivitiesPage: React.FC = () => {
   };
 
   const fetchActivities = async () => {
-    setIsLoading(true);
+    if (activities.length === 0) {
+      setIsLoading(true);
+    }
     try {
       const params = new URLSearchParams();
       if (globalFilter.rangeType && globalFilter.rangeType !== 'all') {

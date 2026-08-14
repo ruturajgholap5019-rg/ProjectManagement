@@ -133,7 +133,9 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
   const [isSavingClient, setIsSavingClient] = useState(false);
 
   const fetchUsers = async () => {
-    setIsLoading(true);
+    if (users.length === 0) {
+      setIsLoading(true);
+    }
     try {
       const data = await apiFetch<UserItem[]>('/users');
       setUsers(data);

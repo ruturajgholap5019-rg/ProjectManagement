@@ -34,7 +34,9 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     const fetchDashboard = async () => {
-      setIsLoading(true);
+      if (!dashboardData) {
+        setIsLoading(true);
+      }
       try {
         const params = new URLSearchParams();
         if (selectedCategory) params.append('category', selectedCategory);
@@ -54,7 +56,7 @@ export const DashboardPage: React.FC = () => {
     fetchDashboard();
   }, [user, selectedCategory, rangeType, startDate, endDate]);
 
-  if (isLoading || !dashboardData) {
+  if (isLoading && !dashboardData) {
     return (
       <div style={{ padding: '60px 32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', fontSize: '1rem', fontWeight: 600 }}>

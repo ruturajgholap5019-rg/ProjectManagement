@@ -74,7 +74,9 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
   };
 
   const fetchProjects = async () => {
-    setIsLoading(true);
+    if (projects.length === 0) {
+      setIsLoading(true);
+    }
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
