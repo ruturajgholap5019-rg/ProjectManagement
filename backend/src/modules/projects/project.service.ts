@@ -4,6 +4,7 @@ import { ProjectStatus, ProjectType, Priority, UserRole } from '../../types/enum
 import { emailService } from '../../services/email.service.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import { AuditService } from '../../services/audit.service.js';
+import { cacheGet, cacheSet, cacheDelPattern } from '../../config/redis.js';
 
 export interface CreateProjectInput {
   name: string;
@@ -93,6 +94,9 @@ export class ProjectService {
         );
       })
     );
+
+    await cacheDelPattern('projects:*');
+    await cacheDelPattern('dashboard:*');
 
     return project;
   }
@@ -205,6 +209,10 @@ export class ProjectService {
       where.name = { contains: filters.search };
     }
 
+    const cacheKey = `projects:${user.role}:${user.id}:${filters.status || 'all'}:${filters.search || 'none'}`;
+    const cached = await cacheGet<any[]>(cacheKey);
+    if (cached) return cached;
+
     const projects = await prisma.project.findMany({
       where,
       include: {
@@ -242,12 +250,15 @@ export class ProjectService {
 
     const completedMap = new Map(completedCounts.map((c: any) => [c.projectId, c._count.id]));
 
-    return projects.map((p: any) => ({
+    const result = projects.map((p: any) => ({
       ...p,
       totalTasks: p._count.tasks,
       completedTasks: completedMap.get(p.id) || 0,
       memberCount: p._count.members,
     }));
+
+    await cacheSet(cacheKey, result, 15);
+    return result;
   }
 
   static async getProjectById(projectId: string) {

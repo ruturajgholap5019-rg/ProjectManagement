@@ -6,8 +6,70 @@ interface RequestOptions extends RequestInit {
   requiresAuth?: boolean;
 }
 
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const clientCache = new Map<string, CacheEntry<any>>();
+const CACHE_MAX_AGE_MS = 60 * 1000; // 1 minute client cache
+
+export function invalidateApiCache(pattern?: string) {
+  if (!pattern) {
+    clientCache.clear();
+    return;
+  }
+  for (const key of clientCache.keys()) {
+    if (key.includes(pattern)) {
+      clientCache.delete(key);
+    }
+  }
+}
+
 export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { requiresAuth = true, headers: customHeaders, ...restOptions } = options;
+  const method = (restOptions.method || 'GET').toUpperCase();
+  const cacheKey = `${endpoint}`;
+
+  // For GET requests, serve instantly from client cache if available
+  if (method === 'GET' && clientCache.has(cacheKey)) {
+    const entry = clientCache.get(cacheKey)!;
+    if (Date.now() - entry.timestamp < CACHE_MAX_AGE_MS) {
+      // Trigger non-blocking background refresh to keep cache warm
+      (async () => {
+        try {
+          const authStore = useAuthStore.getState();
+          const bgHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+            ...(customHeaders as Record<string, string>),
+          };
+          if (requiresAuth && authStore.accessToken) {
+            bgHeaders['Authorization'] = `Bearer ${authStore.accessToken}`;
+          }
+          const bgRes = await fetch(`${BASE_URL}${endpoint}`, {
+            headers: bgHeaders,
+            credentials: 'include',
+            ...restOptions,
+          });
+          if (bgRes.ok) {
+            const bgData = await bgRes.json();
+            if (bgData.data) {
+              clientCache.set(cacheKey, { data: bgData.data, timestamp: Date.now() });
+            }
+          }
+        } catch {
+          // Ignore background fetch errors
+        }
+      })();
+
+      return entry.data as T;
+    }
+  }
+
+  // Mutating requests invalidate cache
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    invalidateApiCache();
+  }
 
   const authStore = useAuthStore.getState();
   const headers: Record<string, string> = {
@@ -62,6 +124,11 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
 
   if (!response.ok) {
     throw new Error(data.message || 'An unexpected error occurred');
+  }
+
+  // Save successful GET response to client cache
+  if (method === 'GET') {
+    clientCache.set(cacheKey, { data: data.data, timestamp: Date.now() });
   }
 
   return data.data;

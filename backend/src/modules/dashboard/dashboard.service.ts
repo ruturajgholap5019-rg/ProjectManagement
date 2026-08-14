@@ -1,15 +1,24 @@
 import { prisma } from '../../config/database.js';
+import { cacheGet, cacheSet } from '../../config/redis.js';
 
 export class DashboardService {
   static async getDashboard(user: { id: string; role: string }, filters?: { category?: string }) {
+    const cacheKey = `dashboard:${user.role}:${user.id}:${filters?.category || 'all'}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) return cached;
+
+    let result;
     const pWhere = filters?.category ? { projectType: filters.category } : {};
     if (user.role === 'ADMIN') {
-      return this.getAdminDashboard(pWhere);
+      result = await this.getAdminDashboard(pWhere);
     } else if (user.role === 'PROJECT_LEAD') {
-      return this.getLeadDashboard(user.id, pWhere);
+      result = await this.getLeadDashboard(user.id, pWhere);
     } else {
-      return this.getMemberDashboard(user.id, pWhere);
+      result = await this.getMemberDashboard(user.id, pWhere);
     }
+
+    await cacheSet(cacheKey, result, 15);
+    return result;
   }
 
   private static async getAdminDashboard(pWhere: any = {}) {
