@@ -45,6 +45,7 @@ model User {
   createdProjects    Project[]        @relation("ProjectCreator")
   projectMemberships ProjectMember[]
   assignedTasks      Task[]           @relation("TaskAssignee")
+  coAssignedTasks    Task[]           @relation("TaskCoAssignee")
   tasksAssignedBy    Task[]           @relation("TaskAssigner")
   createdTasks       Task[]           @relation("TaskCreator")
   workActivities     WorkActivity[]   @relation("MemberWork")
@@ -180,6 +181,7 @@ model Task {
   title         String
   description   String?
   assigneeId    String?    @map("assignee_id")
+  coAssigneeId  String?    @map("co_assignee_id")
   assignedBy    String?    @map("assigned_by")
   assignedAt    DateTime?  @map("assigned_at")
   status        String     @default("TODO") // TODO, IN_PROGRESS, REVIEW, REVISION, COMPLETED
@@ -201,6 +203,7 @@ model Task {
   parentTask    Task?       @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks      Task[]      @relation("Subtasks")
   assignee      User?       @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  coAssignee    User?       @relation("TaskCoAssignee", fields: [coAssigneeId], references: [id], onDelete: SetNull)
   assigner      User?       @relation("TaskAssigner", fields: [assignedBy], references: [id], onDelete: SetNull)
   createdBy     User        @relation("TaskCreator", fields: [createdById], references: [id])
   dependsOn     TaskDependency[] @relation("DependentTask")

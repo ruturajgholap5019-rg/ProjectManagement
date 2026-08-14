@@ -117,15 +117,85 @@ export class DashboardService {
   }
 
   private static async getMemberDashboard(memberId: string, pWhere: any = {}) {
-    const assignedTasks = await prisma.task.findMany({
+    const [assignedTasks, assignedProjectsRaw, myActivities, hoursAgg] = await Promise.all([
+      prisma.task.findMany({
+        where: {
+          OR: [
+            { assigneeId: memberId },
+            { coAssigneeId: memberId }
+          ],
+          ...(pWhere.projectType ? { project: { projectType: pWhere.projectType } } : {}),
+        },
+        include: {
+          project: { select: { id: true, name: true } },
+        },
+        orderBy: { dueDate: 'asc' },
+      }),
+      prisma.project.findMany({
+        where: {
+          OR: [
+            { leadId: memberId },
+            { members: { some: { userId: memberId } } }
+          ],
+          ...(pWhere.projectType ? { projectType: pWhere.projectType } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          projectType: true,
+          priority: true,
+          targetEndDate: true,
+          _count: {
+            select: { tasks: true, members: true }
+          }
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      prisma.workActivity.findMany({
+        where: { userId: memberId },
+        take: 5,
+        orderBy: { dateTime: 'desc' },
+        include: {
+          project: { select: { id: true, name: true } },
+        }
+      }),
+      prisma.workActivity.aggregate({
+        where: { userId: memberId },
+        _sum: { hoursSpent: true },
+        _count: { id: true }
+      })
+    ]);
+
+    // Calculate progress for each assigned project
+    const projectIds = assignedProjectsRaw.map(p => p.id);
+    const completedCounts = projectIds.length > 0 ? await prisma.task.groupBy({
+      by: ['projectId'],
       where: {
-        assigneeId: memberId,
-        ...(pWhere.projectType ? { project: { projectType: pWhere.projectType } } : {}),
+        projectId: { in: projectIds },
+        status: 'COMPLETED',
       },
-      include: {
-        project: { select: { id: true, name: true } },
-      },
-      orderBy: { dueDate: 'asc' },
+      _count: { id: true },
+    }) : [];
+
+    const completedMap = new Map(completedCounts.map((c: any) => [c.projectId, c._count.id]));
+
+    const myProjects = assignedProjectsRaw.map((p: any) => {
+      const totalTasks = p._count.tasks;
+      const completedTasks = completedMap.get(p.id) || 0;
+      const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+      return {
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        projectType: p.projectType,
+        priority: p.priority,
+        targetEndDate: p.targetEndDate,
+        totalTasks,
+        completedTasks,
+        progress,
+        memberCount: p._count.members,
+      };
     });
 
     const now = new Date();
@@ -149,12 +219,23 @@ export class DashboardService {
     return {
       type: 'MEMBER',
       stats: {
-        totalAssigned: assignedTasks.length,
-        completed: assignedTasks.filter((t: any) => t.status === 'COMPLETED').length,
-        inProgress: assignedTasks.filter((t: any) => t.status === 'IN_PROGRESS').length,
-        revision: assignedTasks.filter((t: any) => t.status === 'REVISION').length,
+        // Project stats
+        totalProjects: assignedProjectsRaw.length,
+        activeProjects: assignedProjectsRaw.filter((p: any) => p.status === 'ONGOING' || p.status === 'ACTIVE').length,
+        completedProjects: assignedProjectsRaw.filter((p: any) => p.status === 'COMPLETED').length,
+        // Task stats
+        totalTasks: assignedTasks.length,
+        inProgressTasks: assignedTasks.filter((t: any) => ['IN_PROGRESS', 'REVIEW'].includes(t.status)).length,
+        completedTasks: assignedTasks.filter((t: any) => t.status === 'COMPLETED').length,
+        todoTasks: assignedTasks.filter((t: any) => t.status === 'TODO').length,
+        revisionTasks: assignedTasks.filter((t: any) => t.status === 'REVISION').length,
+        // Activity stats
+        totalHoursLogged: Number((hoursAgg._sum.hoursSpent || 0).toFixed(1)),
+        totalActivities: hoursAgg._count.id || 0,
       },
+      myProjects: myProjects.slice(0, 4),
       workNext: workNext.slice(0, 5),
+      myActivities,
     };
   }
 }

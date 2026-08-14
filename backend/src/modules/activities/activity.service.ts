@@ -4,7 +4,8 @@ import { AppError } from '../../middlewares/error.middleware.js';
 export interface CreateActivityInput {
   userId: string;
   projectId: string;
-  workDescription: string;
+  workDescription?: string;
+  description?: string;
   hoursSpent: number;
   assignedById?: string;
   dateTime?: string;
@@ -14,6 +15,9 @@ export class ActivityService {
   static async logActivity(input: CreateActivityInput) {
     const project = await prisma.project.findUnique({ where: { id: input.projectId } });
     if (!project) throw new AppError('Project not found', 404);
+
+    const desc = (input.workDescription || input.description || '').trim();
+    if (!desc) throw new AppError('Work description is required', 400);
 
     const activity = await prisma.$transaction(async (tx) => {
       const maxSerial = await tx.workActivity.aggregate({
@@ -26,7 +30,7 @@ export class ActivityService {
           serialNo: nextSerialNo,
           userId: input.userId,
           projectId: input.projectId,
-          workDescription: input.workDescription.trim(),
+          workDescription: desc,
           hoursSpent: Number(input.hoursSpent) || 1.0,
           assignedById: input.assignedById || null,
           dateTime: input.dateTime ? new Date(input.dateTime) : new Date(),

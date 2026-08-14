@@ -319,8 +319,28 @@ async function buildActivityLog(wb, activities) {
 }
 
 export class ReportService {
-  static async generateProjectsExcelReport() {
+  static async generateProjectsExcelReport(user: { id: string; role: string }) {
+    let projectWhere: any = {};
+    let taskWhere: any = {};
+    let activityWhere: any = {};
+
+    if (user.role === 'TEAM_MEMBER') {
+      projectWhere = {
+        OR: [
+          { leadId: user.id },
+          { members: { some: { userId: user.id } } },
+        ]
+      };
+      taskWhere = {
+        project: projectWhere
+      };
+      activityWhere = {
+        userId: user.id
+      };
+    }
+
     const projects = await prisma.project.findMany({
+      where: projectWhere,
       include: {
         lead: { select: { id: true, firstName: true, lastName: true, email: true } },
         members: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } } },
@@ -330,6 +350,7 @@ export class ReportService {
     });
 
     const tasks = await prisma.task.findMany({
+      where: taskWhere,
       include: {
         assignee: { select: { id: true, firstName: true, lastName: true, email: true } },
         milestone: { select: { id: true, name: true } },
@@ -338,6 +359,7 @@ export class ReportService {
     });
 
     const activities = await prisma.workActivity.findMany({
+      where: activityWhere,
       include: {
         user: { select: { id: true, firstName: true, lastName: true, email: true } },
         project: { select: { id: true, name: true } },

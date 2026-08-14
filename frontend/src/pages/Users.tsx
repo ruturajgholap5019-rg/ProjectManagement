@@ -8,7 +8,7 @@ import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { Badge } from '../components/UI/Badge';
 import { StudentProfilePage } from './StudentProfile';
 import { isValidPhone, isValidEmail } from '../utils/validation';
-import { UserPlus, UserCheck, UserX, KeyRound, Edit2, Trash2, Users as UsersIcon, Sparkles, Shuffle, Copy, Check, LayoutDashboard, ArrowLeft, Eye, EyeOff, X, Plus, ChevronDown, Building } from 'lucide-react';
+import { UserPlus, UserCheck, UserX, Edit2, Trash2, Users as UsersIcon, Sparkles, Shuffle, Copy, Check, LayoutDashboard, ArrowLeft, Eye, EyeOff, X, Plus, ChevronDown, Building } from 'lucide-react';
 
 interface UserItem {
   id: string;
@@ -75,6 +75,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<string>('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Form View State
   const [isDedicatedFormPage, setIsDedicatedFormPage] = useState(false);
@@ -496,6 +497,14 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
       const hasCatProject = u.projectMemberships?.some((pm) => pm.project?.projectType === selectedCategory);
       if (!hasCatProject) return false;
     }
+    if (searchTerm.trim()) {
+      const lower = searchTerm.toLowerCase();
+      const matchesSearch = 
+        u.firstName?.toLowerCase().includes(lower) || 
+        u.lastName?.toLowerCase().includes(lower) || 
+        u.email?.toLowerCase().includes(lower);
+      if (!matchesSearch) return false;
+    }
     return true;
   });
 
@@ -886,26 +895,47 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
         </div>
       </div>
 
-      {/* Role Filter Bar */}
-      <div className="glass-card" style={{ display: 'flex', gap: '10px', padding: '10px 14px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        {['ALL', 'ADMIN', 'TEAM_MEMBER', 'CLIENTS'].map((role) => (
-          <button
-            key={role}
-            onClick={() => setFilterRole(role)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 'var(--radius-md)',
-              border: 'none',
-              backgroundColor: filterRole === role ? 'var(--primary-light)' : 'transparent',
-              color: filterRole === role ? 'var(--primary)' : 'var(--text-secondary)',
-              fontWeight: filterRole === role ? 700 : 600,
-              fontSize: '0.85rem',
-              cursor: 'pointer',
+      {/* Role Filter Bar and Search */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div className="glass-card" style={{ display: 'flex', gap: '10px', padding: '10px 14px', flexWrap: 'wrap' }}>
+          {['ALL', 'ADMIN', 'TEAM_MEMBER', 'CLIENTS'].map((role) => (
+            <button
+              key={role}
+              onClick={() => setFilterRole(role)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-md)',
+                border: 'none',
+                backgroundColor: filterRole === role ? 'var(--primary-light)' : 'transparent',
+                color: filterRole === role ? 'var(--primary)' : 'var(--text-secondary)',
+                fontWeight: filterRole === role ? 700 : 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+              }}
+            >
+              {role === 'ALL' ? 'All Roles' : role === 'ADMIN' ? 'Administrators' : role === 'TEAM_MEMBER' ? 'Team Members' : 'Clients 🏢'}
+            </button>
+          ))}
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <input
+            placeholder="Search by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ 
+              width: '280px', 
+              padding: '10px 16px', 
+              borderRadius: 'var(--radius-md)', 
+              border: '1px solid var(--border-color)', 
+              backgroundColor: 'var(--bg-main)', 
+              color: 'var(--text-primary)',
+              fontSize: '0.9rem',
+              boxShadow: 'var(--shadow-sm)',
+              outline: 'none'
             }}
-          >
-            {role === 'ALL' ? 'All Roles' : role === 'ADMIN' ? 'Administrators' : role === 'TEAM_MEMBER' ? 'Team Members' : 'Clients 🏢'}
-          </button>
-        ))}
+          />
+        </div>
       </div>
 
       {/* Main Directory Table */}
@@ -1091,26 +1121,30 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
                           </td>
                           <td style={{ padding: '14px 16px' }}>
                             {u.projectMemberships && u.projectMemberships.length > 0 ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                {u.projectMemberships.map((pm, i) => (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {u.projectMemberships.slice(0, 3).map((pm, i) => (
                                   <div
                                     key={i}
                                     style={{
-                                      fontSize: '0.82rem',
+                                      fontSize: '0.75rem',
                                       fontWeight: 600,
                                       color: 'var(--text-primary)',
                                       backgroundColor: 'var(--bg-main)',
-                                      padding: '4px 10px',
+                                      padding: '2px 8px',
                                       borderRadius: 'var(--radius-sm)',
                                       border: '1px solid var(--border-color)',
+                                      whiteSpace: 'nowrap',
                                     }}
+                                    title={`${pm.project.name} (${pm.project.projectType || 'PROJECT'})`}
                                   >
-                                    {pm.project.name}{' '}
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>
-                                      ({pm.project.projectType || 'PROJECT'})
-                                    </span>
+                                    {pm.project.name.length > 20 ? pm.project.name.substring(0, 20) + '...' : pm.project.name}
                                   </div>
                                 ))}
+                                {u.projectMemberships.length > 3 && (
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700, alignSelf: 'center' }}>
+                                    +{u.projectMemberships.length - 3} more
+                                  </span>
+                                )}
                               </div>
                             ) : (
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Unassigned</span>
@@ -1137,19 +1171,6 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
 
                               <Button size="sm" variant="secondary" onClick={() => handleOpenEdit(u)} title="Edit Details">
                                 <Edit2 size={14} />
-                              </Button>
-
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => {
-                                  setResetUserId(u.id);
-                                  setNewResetPassword('');
-                                  setIsResetPassVisible(false);
-                                }}
-                                title="Password Management (View & Change Password)"
-                              >
-                                <KeyRound size={14} />
                               </Button>
 
                               <Button

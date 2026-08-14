@@ -492,62 +492,328 @@ export const DashboardPage: React.FC = () => {
         </>
       )}
 
-      {/* TEAM MEMBER DASHBOARD */}
+      {/* TEAM MEMBER / STUDENT DASHBOARD */}
       {type === 'MEMBER' && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '36px' }}>
-            <div className="glass-card hover-lift" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Tasks</div>
-              <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '10px', fontFamily: 'var(--font-display)' }}>{stats.totalAssigned}</div>
+          {/* Grouped High-Density Metrics Ribbon */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+            <div className="glass-card hover-lift" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>My Projects</span>
+                <FolderKanban size={18} color="var(--primary)" />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '6px' }}>
+                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{stats.totalProjects || 0}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>({stats.activeProjects || 0} Active)</span>
+              </div>
             </div>
-            <div className="glass-card hover-lift" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-secondary)' }}>In Progress</div>
-              <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--info)', marginTop: '10px', fontFamily: 'var(--font-display)' }}>{stats.inProgress}</div>
+
+            <div className="glass-card hover-lift" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Completed Projects</span>
+                <CheckCircle2 size={18} color="var(--success)" />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '6px' }}>
+                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--success)', fontFamily: 'var(--font-display)' }}>{stats.completedProjects || 0}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Finished</span>
+              </div>
             </div>
-            <div className="glass-card hover-lift" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Revisions Requested</div>
-              <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--danger)', marginTop: '10px', fontFamily: 'var(--font-display)' }}>{stats.revision}</div>
+
+            <div className="glass-card hover-lift" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Assigned Tasks</span>
+                <CheckSquare size={18} color="var(--primary)" />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '6px' }}>
+                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{stats.totalTasks ?? stats.totalAssigned ?? 0}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total</span>
+              </div>
             </div>
-            <div className="glass-card hover-lift" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Completed</div>
-              <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--success)', marginTop: '10px', fontFamily: 'var(--font-display)' }}>{stats.completed}</div>
+
+            <div className="glass-card hover-lift" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tasks In Progress</span>
+                <Clock size={18} color="var(--info)" />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '6px' }}>
+                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--info)', fontFamily: 'var(--font-display)' }}>{stats.inProgressTasks ?? stats.inProgress ?? 0}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Ongoing</span>
+              </div>
+            </div>
+
+            <div className="glass-card hover-lift" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Tasks Completed</span>
+                <CheckCircle2 size={18} color="var(--success)" />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '6px' }}>
+                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--success)', fontFamily: 'var(--font-display)' }}>{stats.completedTasks ?? stats.completed ?? 0}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Done</span>
+              </div>
+            </div>
+
+            <div className="glass-card hover-lift" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Hours Logged</span>
+                <Activity size={18} color="var(--accent-purple)" />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '6px' }}>
+                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent-purple)', fontFamily: 'var(--font-display)' }}>{stats.totalHoursLogged || 0}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Hrs ({stats.totalActivities || 0} logs)</span>
+              </div>
             </div>
           </div>
 
-          {/* Work Next Prioritized Queue */}
-          <div className="glass-card" style={{ padding: '28px' }}>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ArrowRight size={22} color="var(--primary)" />
-              Prioritized "Work Next" Queue
-            </h3>
+          {/* Main 2-Column Space-Efficient Workspace */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: '22px', alignItems: 'start' }}>
+            
+            {/* Left Column: Projects & Prioritized Deliverables */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
+              {/* My Projects Card */}
+              <div className="glass-card" style={{ padding: '22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FolderKanban size={18} color="var(--primary)" />
+                    My Assigned Projects
+                  </h3>
+                  <Button variant="ghost" onClick={() => navigateTo('projects')} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+                    View All <ChevronRight size={14} />
+                  </Button>
+                </div>
 
-            {dashboardData.workNext?.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--text-muted)' }}>
-                <CheckCircle2 size={40} color="var(--success)" style={{ marginBottom: '10px' }} />
-                <p style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>Welcome to Project Tracker!</p>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '4px', maxWidth: '500px', margin: '4px auto 16px auto' }}>
-                  {stats.totalAssigned === 0
-                    ? 'You currently have no project or task assignments. You can log your work activities or explore digital project portfolios anytime.'
-                    : 'All caught up! No pending work items in queue.'}
-                </p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {dashboardData.workNext.map((item: any) => (
-                  <div key={item.task.id} style={{ backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '18px', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.98rem' }}>{item.task.title}</div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        Project: <strong>{item.task.project?.name}</strong>
+                {!dashboardData.myProjects || dashboardData.myProjects.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', padding: '10px 0' }}>No projects assigned yet.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {dashboardData.myProjects.map((p: any) => (
+                      <div
+                        key={p.id}
+                        onClick={() => navigateTo(`projects/${p.id}`)}
+                        className="hover-lift"
+                        style={{
+                          backgroundColor: 'var(--bg-main)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '12px 16px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+                            {p.name}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <Badge variant={p.status === 'COMPLETED' ? 'success' : p.status === 'AT_RISK' ? 'danger' : 'neutral'}>
+                              {p.status.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ flex: 1, height: '5px', backgroundColor: 'var(--border-color)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                width: `${p.progress}%`,
+                                height: '100%',
+                                background: 'linear-gradient(90deg, var(--primary), var(--accent-purple))',
+                                borderRadius: 'var(--radius-full)',
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)', minWidth: '85px', textAlign: 'right' }}>
+                            {p.completedTasks}/{p.totalTasks} ({p.progress}%)
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <Badge variant={item.reason === 'revision_requested' ? 'danger' : item.reason === 'overdue' ? 'danger' : 'info'}>
-                      {item.reason.replace('_', ' ')}
-                    </Badge>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
+
+              {/* Prioritized "Work Next" Queue */}
+              <div className="glass-card" style={{ padding: '22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ArrowRight size={18} color="var(--primary)" />
+                    Prioritized "Work Next" Tasks
+                  </h3>
+                  <Button variant="ghost" onClick={() => navigateTo('tasks')} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+                    All Tasks <ChevronRight size={14} />
+                  </Button>
+                </div>
+
+                {!dashboardData.workNext || dashboardData.workNext.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px 10px', color: 'var(--text-muted)' }}>
+                    <CheckCircle2 size={32} color="var(--success)" style={{ marginBottom: '6px' }} />
+                    <p style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)' }}>All Caught Up!</p>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>No pending tasks in queue.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {dashboardData.workNext.map((item: any) => (
+                      <div
+                        key={item.task.id}
+                        style={{
+                          backgroundColor: 'var(--bg-main)',
+                          border: '1px solid var(--border-color)',
+                          padding: '12px 16px',
+                          borderRadius: 'var(--radius-md)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{item.task.title}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            Project: <strong>{item.task.project?.name}</strong>
+                          </div>
+                        </div>
+                        <Badge variant={item.reason === 'revision_requested' ? 'danger' : item.reason === 'overdue' ? 'danger' : 'info'}>
+                          {item.reason.replace('_', ' ')}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Recent Activities Log & Quick Shortcuts */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
+              {/* Quick Actions Card */}
+              <div className="glass-card" style={{ padding: '20px' }}>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                  ⚡ Quick Actions
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                  <button
+                    onClick={() => navigateTo('activities')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 14px',
+                      backgroundColor: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      color: 'var(--text-primary)',
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s ease',
+                    }}
+                    className="hover-lift"
+                  >
+                    <Activity size={16} color="var(--primary)" />
+                    <span>Log Work Activity / Hours</span>
+                  </button>
+
+                  <button
+                    onClick={() => navigateTo('tasks')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 14px',
+                      backgroundColor: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      color: 'var(--text-primary)',
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s ease',
+                    }}
+                    className="hover-lift"
+                  >
+                    <CheckSquare size={16} color="var(--info)" />
+                    <span>View My Deliverables & Tasks</span>
+                  </button>
+
+                  <button
+                    onClick={() => navigateTo('projects')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 14px',
+                      backgroundColor: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      color: 'var(--text-primary)',
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s ease',
+                    }}
+                    className="hover-lift"
+                  >
+                    <FolderKanban size={16} color="var(--accent-purple)" />
+                    <span>Browse Digital Projects Portfolio</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Student's Recent Activity Feed */}
+              <div className="glass-card" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Activity size={16} color="var(--primary)" />
+                    My Recent Activity Logs
+                  </h4>
+                  <Button variant="ghost" onClick={() => navigateTo('activities')} style={{ fontSize: '0.76rem', padding: '2px 8px' }}>
+                    History <ChevronRight size={12} />
+                  </Button>
+                </div>
+
+                {!dashboardData.myActivities || dashboardData.myActivities.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>No activity logs recorded yet. Use "Log Work Activity" above to record your work hours!</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {dashboardData.myActivities.map((act: any) => (
+                      <div
+                        key={act.id}
+                        style={{
+                          backgroundColor: 'var(--bg-main)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '10px 14px',
+                          fontSize: '0.82rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.84rem' }}>
+                            {act.project?.name || 'Project Work'}
+                          </span>
+                          <span style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 800, fontSize: '0.72rem', padding: '2px 8px', borderRadius: 'var(--radius-full)' }}>
+                            ⏱️ {act.hoursSpent}h
+                          </span>
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', lineHeight: '1.4' }}>
+                          {act.workDescription}
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginTop: '4px' }}>
+                          {new Date(act.dateTime).toLocaleDateString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
           </div>
         </>
       )}

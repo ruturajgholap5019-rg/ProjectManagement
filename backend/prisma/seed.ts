@@ -12,7 +12,7 @@ async function main() {
   // 1. Organization Admin User
   const admin = await prisma.user.upsert({
     where: { email: 'admin@organization.com' },
-    update: {},
+    update: { passwordHash: commonPassword, isActive: true },
     create: {
       email: 'admin@organization.com',
       passwordHash: commonPassword,
@@ -27,7 +27,7 @@ async function main() {
   // 2. Default Student User
   const defaultStudent = await prisma.user.upsert({
     where: { email: 'student@organization.com' },
-    update: {},
+    update: { passwordHash: commonPassword, isActive: true },
     create: {
       email: 'student@organization.com',
       passwordHash: commonPassword,

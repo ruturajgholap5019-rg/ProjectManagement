@@ -1,0 +1,32 @@
+services:
+  # Node.js Express Backend API Service
+  - type: web
+    name: digital-team-backend
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: cd backend && npm install && npx prisma generate && npm run build
+    startCommand: cd backend && npx prisma migrate deploy && npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: digital-team-db
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: '*'
+
+databases:
+  # Managed PostgreSQL Database Service
+  - name: digital-team-db
+    region: singapore
+    plan: free
+    databaseName: digital_team_db
+    user: digital_team_user

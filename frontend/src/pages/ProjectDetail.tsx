@@ -8,7 +8,7 @@ import { Modal } from '../components/UI/Modal';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { Badge } from '../components/UI/Badge';
 import { generateProjectPdfReport } from '../utils/pdfReportGenerator';
-import { ArrowLeft, CheckCircle2, UserPlus, UserX, AlertTriangle, Plus, MessageSquare, Paperclip, Download, Sparkles, FileText, Trash2 } from 'lucide-react';
+import { CheckCircle2, UserPlus, UserX, AlertTriangle, Plus, MessageSquare, Paperclip, Download, Sparkles, FileText, Trash2 } from 'lucide-react';
 
 interface ProjectDetailProps {
   projectId: string;
@@ -26,8 +26,9 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
   const [tasks, setTasks] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [attachments, setAttachments] = useState<any[]>([]);
+  const [projectActivities, setProjectActivities] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'members' | 'comments' | 'files'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'members' | 'comments' | 'files'>('overview');
 
   // Edit Project Settings Modal
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
@@ -120,9 +121,14 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
   const [taskPriority, setTaskPriority] = useState('MEDIUM');
 
   const toggleTaskAssignee = (userId: string) => {
-    setTaskAssignees((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
-    );
+    setTaskAssignees((prev) => {
+      if (prev.includes(userId)) return prev.filter((id) => id !== userId);
+      if (prev.length >= 2) {
+        alert("A task can have a maximum of 2 assignees.");
+        return prev;
+      }
+      return [...prev, userId];
+    });
   };
 
   // Submitting States
@@ -209,13 +215,14 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
   const fetchProjectDetails = async () => {
     setIsLoading(true);
     try {
-      const [projData, membersData, msData, taskData, commentData, attachData] = await Promise.all([
+      const [projData, membersData, msData, taskData, commentData, attachData, actData] = await Promise.all([
         apiFetch<any>(`/projects/${projectId}`),
         apiFetch<any[]>(`/projects/${projectId}/members`),
         apiFetch<any[]>(`/projects/${projectId}/milestones`),
         apiFetch<any[]>(`/projects/${projectId}/tasks`),
         apiFetch<any[]>(`/comments?projectId=${projectId}`),
         apiFetch<any[]>(`/attachments?projectId=${projectId}`),
+        apiFetch<any>(`/activities?projectId=${projectId}`),
       ]);
 
       setProject(projData);
@@ -225,6 +232,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       setTasks(taskData);
       setComments(commentData);
       setAttachments(attachData);
+      setProjectActivities(actData.activities || []);
     } catch (err: any) {
       alert(err.message || 'Failed to load project details');
     } finally {
@@ -359,7 +367,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
           title: taskTitle,
           description: taskDesc,
           assigneeId: taskAssignees[0] || taskAssignee || undefined,
-          assigneeIds: taskAssignees,
+          coAssigneeId: taskAssignees[1] || undefined,
           milestoneId: taskMilestone || undefined,
           priority: taskPriority,
         }),
@@ -447,7 +455,108 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     }
   };
 
-  if (isLoading || !project) {
+  if (isLoading) {
+    return <div style={{ padding: '36px' }}>Loading project details...</div>;
+  }
+
+  if (isEditProjectOpen) {
+    return (
+      <div className="animate-fade-in" style={{ padding: '24px 36px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+        <div className="glass-card" style={{ padding: '36px' }}>
+          <div style={{ marginBottom: '24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '18px' }}>
+            <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
+              Edit Project Details
+            </h2>
+          </div>
+
+          <form onSubmit={handleUpdateProjectDetails} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+            <Input
+              label="Project Title"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Project name..."
+              required
+            />
+
+            <Select
+              label="Project Type / Category"
+              value={editProjectType}
+              onChange={(e) => setEditProjectType(e.target.value)}
+              options={categories.map((c) => ({
+                value: c.code,
+                label: `${c.icon || '📁'} ${c.name}`,
+              }))}
+            />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <Select
+                label="🏢 Client (Optional)"
+                value={editClientId}
+                onChange={(e) => setEditClientId(e.target.value)}
+                options={[
+                  { value: '', label: 'None (Internal / No Client)' },
+                  ...clientsList.map((c) => ({
+                    value: c.id,
+                    label: `🏢 ${c.name}`,
+                  })),
+                ]}
+              />
+              <Input
+                label="👨‍🏫 Referred By (Person / Teacher)"
+                placeholder="e.g. Dr. Sharma / Prof. Kulkarni"
+                value={editReferencePerson}
+                onChange={(e) => setEditReferencePerson(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <Input
+                label="📅 Started Date (Optional)"
+                type="date"
+                value={editStartDate}
+                onChange={(e) => setEditStartDate(e.target.value)}
+                helperText="Leave empty if Not Set"
+              />
+              <Input
+                label="🎯 Target Delivery Date (Optional)"
+                type="date"
+                value={editTargetEndDate}
+                onChange={(e) => setEditTargetEndDate(e.target.value)}
+                helperText="Target completion deadline"
+              />
+            </div>
+
+            <TextArea
+              label="Project Scope & Deliverables"
+              value={editScope}
+              onChange={(e) => setEditScope(e.target.value)}
+              placeholder="Detailed scope..."
+              rows={4}
+            />
+
+            <TextArea
+              label="Background Description"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              placeholder="Notes or description..."
+              rows={3}
+            />
+
+            <div style={{ display: 'flex', gap: '14px', marginTop: '12px' }}>
+              <Button variant="gradient" type="submit" isLoading={isSavingProject} style={{ flex: 1, padding: '12px' }}>
+                Save Changes
+              </Button>
+              <Button variant="secondary" type="button" onClick={() => setIsEditProjectOpen(false)} style={{ padding: '12px 24px' }}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
     return (
       <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
         <Sparkles className="animate-pulse-glow" size={24} color="var(--primary)" style={{ marginBottom: '10px' }} />
@@ -465,26 +574,6 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
   return (
     <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '1280px', margin: '0 auto' }}>
-      {/* Back Button */}
-      <button
-        onClick={onBack}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--text-secondary)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          fontSize: '0.9rem',
-          fontWeight: 700,
-          marginBottom: '22px',
-          transition: 'color 0.15s ease',
-        }}
-      >
-        <ArrowLeft size={18} />
-        Back to Projects List
-      </button>
 
       {/* Main Header Banner */}
       <div className="glass-card" style={{ padding: '32px', marginBottom: '32px' }}>
@@ -516,6 +605,25 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
             <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
               {project.name}
             </h1>
+
+            {/* Additional Context Metadata */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px', fontSize: '0.85rem' }}>
+              {project.client && (
+                <span style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 700, padding: '4px 12px', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  🏢 Client: {project.client.name}
+                </span>
+              )}
+              {(project.referencePerson || project.client?.referencePerson) && (
+                <span style={{ backgroundColor: 'var(--bg-main)', color: 'var(--text-secondary)', fontWeight: 600, padding: '4px 12px', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  👨‍🏫 Referred By: {project.referencePerson || project.client?.referencePerson}
+                </span>
+              )}
+              {project.lead && (
+                <span style={{ backgroundColor: 'var(--bg-main)', color: 'var(--text-primary)', fontWeight: 600, padding: '4px 12px', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  👤 Assigned To (Lead): {project.lead.firstName} {project.lead.lastName}
+                </span>
+              )}
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -568,6 +676,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
         {[
           { id: 'overview', label: 'Overview' },
           { id: 'tasks', label: `Milestones & Tasks (${tasks.length})` },
+          { id: 'activities', label: `Work Activity (${projectActivities.length})` },
           { id: 'members', label: `Team Members (${members.length})` },
           { id: 'comments', label: `Comments (${comments.length})` },
           { id: 'files', label: `Files (${attachments.length})` },
@@ -812,6 +921,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
                           {t.milestone && <Badge variant="info">{t.milestone.name}</Badge>}
                           <Badge variant={t.priority === 'CRITICAL' ? 'danger' : t.priority === 'HIGH' ? 'warning' : 'neutral'}>{t.priority}</Badge>
                           {t.assignee && <Badge variant="gradient">👤 {t.assignee.firstName} {t.assignee.lastName}</Badge>}
+                          {t.coAssignee && <Badge variant="neutral">👥 {t.coAssignee.firstName} {t.coAssignee.lastName}</Badge>}
                           {dueDateText && (
                             <span
                               style={{
@@ -885,6 +995,41 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Work Activity Tab */}
+      {activeTab === 'activities' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>Work Activities</h3>
+          </div>
+          <div className="glass-card" style={{ padding: '24px' }}>
+            {projectActivities.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '20px 0' }}>
+                No work activities logged for this project yet.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {projectActivities.map((act) => (
+                  <div key={act.id} style={{ padding: '16px', background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', minWidth: '90px' }}>
+                      {new Date(act.dateTime || act.createdAt).toLocaleDateString()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                        {act.workDescription}
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <span>👤 {act.user?.firstName} {act.user?.lastName}</span>
+                        <span>⏱️ {act.hoursSpent} hrs</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1112,7 +1257,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
           <TextArea label="Task Description" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} placeholder="Technical requirements, acceptance criteria..." />
           <div>
             <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-              Assign Team Member(s) (One or More)
+              Assign Team Member(s) (Maximum 2)
             </label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '10px 12px', borderRadius: 'var(--radius-md)', maxHeight: '140px', overflowY: 'auto' }}>
               {members.length === 0 ? (
@@ -1177,85 +1322,6 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
           />
           <Button variant="gradient" type="submit" isLoading={isCreatingTask} disabled={isCreatingTask} style={{ marginTop: '8px' }}>
             Create Task
-          </Button>
-        </form>
-      </Modal>
-
-      {/* Edit Project Settings & Category Modal (Admin) */}
-      <Modal isOpen={isEditProjectOpen} onClose={() => setIsEditProjectOpen(false)} title="Edit Project Category, Priority & Details">
-        <form onSubmit={handleUpdateProjectDetails} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Input
-            label="Project Title"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            placeholder="Project name..."
-            required
-          />
-
-          <Select
-            label="Project Type / Category"
-            value={editProjectType}
-            onChange={(e) => setEditProjectType(e.target.value)}
-            options={categories.map((c) => ({
-              value: c.code,
-              label: `${c.icon || '📁'} ${c.name}`,
-            }))}
-          />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <Select
-              label="🏢 Client (Optional)"
-              value={editClientId}
-              onChange={(e) => setEditClientId(e.target.value)}
-              options={[
-                { value: '', label: 'None (Internal / No Client)' },
-                ...clientsList.map((c) => ({
-                  value: c.id,
-                  label: `🏢 ${c.name}`,
-                })),
-              ]}
-            />
-            <Input
-              label="👨‍🏫 Referred By (Person / Teacher)"
-              placeholder="e.g. Dr. Sharma / Prof. Kulkarni"
-              value={editReferencePerson}
-              onChange={(e) => setEditReferencePerson(e.target.value)}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <Input
-              label="📅 Started Date (Optional)"
-              type="date"
-              value={editStartDate}
-              onChange={(e) => setEditStartDate(e.target.value)}
-              helperText="Leave empty if Not Set"
-            />
-            <Input
-              label="🎯 Target Delivery Date (Optional)"
-              type="date"
-              value={editTargetEndDate}
-              onChange={(e) => setEditTargetEndDate(e.target.value)}
-              helperText="Target completion deadline"
-            />
-          </div>
-
-          <TextArea
-            label="Project Scope & Deliverables"
-            value={editScope}
-            onChange={(e) => setEditScope(e.target.value)}
-            placeholder="Detailed scope..."
-          />
-
-          <TextArea
-            label="Background Description"
-            value={editDescription}
-            onChange={(e) => setEditDescription(e.target.value)}
-            placeholder="Notes or description..."
-          />
-
-          <Button variant="gradient" type="submit" isLoading={isSavingProject} style={{ marginTop: '8px' }}>
-            Save Changes
           </Button>
         </form>
       </Modal>

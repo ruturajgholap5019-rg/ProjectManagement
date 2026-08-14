@@ -9,6 +9,7 @@ export interface CreateTaskInput {
   title: string;
   description?: string;
   assigneeId?: string;
+  coAssigneeId?: string;
   priority?: Priority;
   startDate?: string;
   dueDate?: string;
@@ -39,8 +40,9 @@ export class TaskService {
         title: input.title.trim(),
         description: input.description?.trim(),
         assigneeId: input.assigneeId || null,
-        assignedBy: input.assigneeId ? input.createdById : null,
-        assignedAt: input.assigneeId ? new Date() : null,
+        coAssigneeId: input.coAssigneeId || null,
+        assignedBy: input.assigneeId || input.coAssigneeId ? input.createdById : null,
+        assignedAt: input.assigneeId || input.coAssigneeId ? new Date() : null,
         priority: input.priority || Priority.MEDIUM,
         startDate: input.startDate ? new Date(input.startDate) : null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
@@ -48,6 +50,7 @@ export class TaskService {
       },
       include: {
         assignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
+        coAssignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
         milestone: { select: { id: true, name: true } },
       },
     });
@@ -86,9 +89,10 @@ export class TaskService {
       where,
       include: {
         assignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
+        coAssignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
         milestone: { select: { id: true, name: true } },
         subtasks: {
-          select: { id: true, title: true, status: true, assigneeId: true },
+          select: { id: true, title: true, status: true, assigneeId: true, coAssigneeId: true },
         },
         dependsOn: {
           include: {
@@ -108,6 +112,7 @@ export class TaskService {
     if (user.role !== UserRole.ADMIN) {
       where.OR = [
         { assigneeId: user.id },
+        { coAssigneeId: user.id },
         { project: { leadId: user.id } },
         { project: { members: { some: { userId: user.id } } } },
       ];
@@ -119,6 +124,7 @@ export class TaskService {
         project: { select: { id: true, name: true, projectType: true } },
         milestone: { select: { id: true, name: true } },
         assignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
+        coAssignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
       },
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
     });
@@ -133,6 +139,7 @@ export class TaskService {
         project: { select: { id: true, name: true, leadId: true } },
         milestone: { select: { id: true, name: true } },
         assignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
+        coAssignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
         assigner: { select: { id: true, firstName: true, lastName: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         subtasks: {
@@ -174,7 +181,7 @@ export class TaskService {
 
     if (!task) throw new AppError('Task not found', 404);
 
-    const isAssignee = task.assigneeId === user.id;
+    const isAssignee = task.assigneeId === user.id || task.coAssigneeId === user.id;
     const isLead = task.project.leadId === user.id;
     const isAdmin = user.role === UserRole.ADMIN;
 
@@ -221,7 +228,7 @@ export class TaskService {
 
     if (!task) throw new AppError('Task not found', 404);
 
-    const isAssignee = task.assigneeId === user.id;
+    const isAssignee = task.assigneeId === user.id || task.coAssigneeId === user.id;
     const isLead = task.project.leadId === user.id;
     const isAdmin = user.role === UserRole.ADMIN;
 
@@ -252,11 +259,27 @@ export class TaskService {
       updateData.assignedAt = new Date();
     }
 
+    if (input.coAssigneeId !== undefined && input.coAssigneeId !== task.coAssigneeId) {
+      if (input.coAssigneeId) {
+        const isMember = await prisma.projectMember.findUnique({
+          where: { projectId_userId: { projectId: task.projectId, userId: input.coAssigneeId } },
+        });
+        const isProjectLead = task.project.leadId === input.coAssigneeId;
+        if (!isMember && !isProjectLead) {
+          throw new AppError('Co-Assignee must be a member of the project.', 400);
+        }
+      }
+      updateData.coAssigneeId = input.coAssigneeId;
+      updateData.assignedBy = user.id;
+      updateData.assignedAt = new Date();
+    }
+
     const updated = await prisma.task.update({
       where: { id: taskId },
       data: updateData,
       include: {
         assignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
+        coAssignee: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
         milestone: { select: { id: true, name: true } },
       },
     });

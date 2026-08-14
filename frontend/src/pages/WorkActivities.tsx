@@ -120,14 +120,19 @@ export const WorkActivitiesPage: React.FC = () => {
 
   const fetchDropdownData = async () => {
     try {
-      const [pData, uData] = await Promise.all([
-        apiFetch<any[]>('/projects'),
-        apiFetch<any[]>('/users'),
-      ]);
+      const pData = await apiFetch<any[]>('/projects');
       setProjectsList(pData);
-      setMembersList(uData);
-    } catch {
-      // Ignore
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+    }
+
+    if (user?.role === 'ADMIN') {
+      try {
+        const uData = await apiFetch<any[]>('/users');
+        setMembersList(uData);
+      } catch (err) {
+        console.error('Failed to load users:', err);
+      }
     }
   };
 

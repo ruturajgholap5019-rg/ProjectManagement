@@ -8,7 +8,7 @@ export class ActivityController {
       const activity = await ActivityService.logActivity({
         userId: req.body.userId || req.user!.id,
         projectId: req.body.projectId,
-        workDescription: req.body.workDescription,
+        workDescription: req.body.workDescription || req.body.description,
         hoursSpent: req.body.hoursSpent,
         assignedById: req.user!.role === 'ADMIN' ? req.user!.id : undefined,
         dateTime: req.body.dateTime,
@@ -21,8 +21,13 @@ export class ActivityController {
 
   static async listActivities(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      let filterUserId = req.query.userId as string;
+      if (req.user!.role === 'TEAM_MEMBER' && !req.query.projectId) {
+        filterUserId = req.user!.id;
+      }
+
       const result = await ActivityService.listActivities({
-        userId: req.query.userId as string,
+        userId: filterUserId,
         projectId: req.query.projectId as string,
         period: req.query.period as any,
         startDate: req.query.startDate as string,
@@ -37,8 +42,13 @@ export class ActivityController {
 
   static async exportActivitiesCSV(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      let filterUserId = req.query.userId as string;
+      if (req.user!.role === 'TEAM_MEMBER' && !req.query.projectId) {
+        filterUserId = req.user!.id;
+      }
+
       const csv = await ActivityService.exportToCSV({
-        userId: req.query.userId as string,
+        userId: filterUserId,
         projectId: req.query.projectId as string,
         period: req.query.period as any,
         startDate: req.query.startDate as string,

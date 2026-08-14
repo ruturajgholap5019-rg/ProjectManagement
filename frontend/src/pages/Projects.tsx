@@ -367,16 +367,13 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
   }
 
   return (
-    <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '1280px', margin: '0 auto' }}>
+    <div className="animate-fade-in" style={{ padding: '20px 36px', maxWidth: '1280px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
             Digital <span className="text-gradient">Projects</span>
           </h1>
-          <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Admin project creation, direct student assignments, scopes, and deliverable tracking.
-          </p>
         </div>
         {user?.role === 'ADMIN' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
