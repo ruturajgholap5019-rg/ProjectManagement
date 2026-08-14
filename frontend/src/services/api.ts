@@ -48,7 +48,17 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
     }
   }
 
-  const data = await response.json();
+  let data: any;
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    data = await response.json();
+  } else {
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Server error (${response.status}): ${text || response.statusText}`);
+    }
+    data = { data: text };
+  }
 
   if (!response.ok) {
     throw new Error(data.message || 'An unexpected error occurred');
