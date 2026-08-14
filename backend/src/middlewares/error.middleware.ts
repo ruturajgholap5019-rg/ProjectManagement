@@ -38,13 +38,12 @@ export function errorHandler(
     });
   }
 
-  const message =
-    env.NODE_ENV === 'production' ? 'Internal server error' : err.message || 'Internal server error';
+  const message = err.message || 'Internal server error';
 
   return sendError(
     res,
     message,
-    500,
-    env.NODE_ENV === 'development' ? { stack: err.stack } : undefined
+    err.statusCode || 500,
+    { details: err.details, code: err.code }
   );
 }
