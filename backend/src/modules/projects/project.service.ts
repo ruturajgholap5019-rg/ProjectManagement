@@ -97,76 +97,88 @@ export class ProjectService {
     return project;
   }
 
+  private static lastDeadlineCheck = 0;
+
   static async checkExpiredProjectDeadlines() {
-    try {
-      const now = new Date();
-      const expiredProjects = await prisma.project.findMany({
-        where: {
-          targetEndDate: { lt: now },
-          status: { notIn: [ProjectStatus.COMPLETED, ProjectStatus.CANCELLED, ProjectStatus.AT_RISK] },
-        },
-        include: {
-          lead: { select: { id: true, email: true, firstName: true, lastName: true } },
-        },
-      });
+    const now = Date.now();
+    // Throttle checks to once every 15 minutes to avoid database overhead on page views
+    if (now - ProjectService.lastDeadlineCheck < 15 * 60 * 1000) {
+      return;
+    }
+    ProjectService.lastDeadlineCheck = now;
 
-      for (const project of expiredProjects) {
-        const deadlineDate = project.targetEndDate
-          ? new Date(project.targetEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          : 'target date';
-        const reason = `Project deadline expired on ${deadlineDate}. Automatically moved to AT_RISK category.`;
-
-        await prisma.project.update({
-          where: { id: project.id },
-          data: {
-            status: ProjectStatus.AT_RISK,
-            statusReason: reason,
+    // Run in background asynchronously so API requests return instantly
+    (async () => {
+      try {
+        const nowDate = new Date();
+        const expiredProjects = await prisma.project.findMany({
+          where: {
+            targetEndDate: { lt: nowDate },
+            status: { notIn: [ProjectStatus.COMPLETED, ProjectStatus.CANCELLED, ProjectStatus.AT_RISK] },
+          },
+          include: {
+            lead: { select: { id: true, email: true, firstName: true, lastName: true } },
           },
         });
 
-        const admins = await prisma.user.findMany({
-          where: { role: UserRole.ADMIN, isActive: true },
-          select: { id: true, email: true, firstName: true, lastName: true },
-        });
+        for (const project of expiredProjects) {
+          const deadlineDate = project.targetEndDate
+            ? new Date(project.targetEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : 'target date';
+          const reason = `Project deadline expired on ${deadlineDate}. Automatically moved to AT_RISK category.`;
 
-        const notifyUsersMap = new Map<string, { id: string; email: string; name: string }>();
-        if (project.lead) {
-          notifyUsersMap.set(project.lead.id, {
-            id: project.lead.id,
-            email: project.lead.email,
-            name: `${project.lead.firstName} ${project.lead.lastName}`,
-          });
-        }
-        admins.forEach((a) => {
-          notifyUsersMap.set(a.id, {
-            id: a.id,
-            email: a.email,
-            name: `${a.firstName} ${a.lastName}`,
-          });
-        });
-
-        for (const [, userObj] of notifyUsersMap.entries()) {
-          await NotificationService.createNotification(userObj.id, {
-            type: 'PROJECT_AT_RISK',
-            title: `🚨 Project Deadline Expired: ${project.name}`,
-            message: `Project "${project.name}" target deadline has expired (${deadlineDate}). Status set to AT_RISK.`,
-            link: `/projects/${project.id}`,
+          await prisma.project.update({
+            where: { id: project.id },
+            data: {
+              status: ProjectStatus.AT_RISK,
+              statusReason: reason,
+            },
           });
 
-          if (userObj.email) {
-            await emailService.sendProjectAssignmentEmail(
-              userObj.email,
-              userObj.name,
-              `🚨 DEADLINE EXPIRED: ${project.name} (AT RISK)`,
-              `Project "${project.name}" target deadline has expired. System automatically updated status to AT_RISK. Please review project progress.`,
-              project.targetEndDate
-            );
+          const admins = await prisma.user.findMany({
+            where: { role: UserRole.ADMIN, isActive: true },
+            select: { id: true, email: true, firstName: true, lastName: true },
+          });
+
+          const notifyUsersMap = new Map<string, { id: string; email: string; name: string }>();
+          if (project.lead) {
+            notifyUsersMap.set(project.lead.id, {
+              id: project.lead.id,
+              email: project.lead.email,
+              name: `${project.lead.firstName} ${project.lead.lastName}`,
+            });
+          }
+          admins.forEach((a) => {
+            notifyUsersMap.set(a.id, {
+              id: a.id,
+              email: a.email,
+              name: `${a.firstName} ${a.lastName}`,
+            });
+          });
+
+          for (const [, userObj] of notifyUsersMap.entries()) {
+            await NotificationService.createNotification(userObj.id, {
+              type: 'PROJECT_AT_RISK',
+              title: `🚨 Project Deadline Expired: ${project.name}`,
+              message: `Project "${project.name}" target deadline has expired (${deadlineDate}). Status set to AT_RISK.`,
+              link: `/projects/${project.id}`,
+            });
+
+            if (userObj.email) {
+              await emailService.sendProjectAssignmentEmail(
+                userObj.email,
+                userObj.name,
+                `🚨 DEADLINE EXPIRED: ${project.name} (AT RISK)`,
+                `Project "${project.name}" target deadline has expired. System automatically updated status to AT_RISK. Please review project progress.`,
+                project.targetEndDate
+              );
+            }
           }
         }
+      } catch (err) {
+        console.error('Failed to process expired project deadlines:', err);
       }
-    } catch (err) {
-      console.error('Failed to process expired project deadlines:', err);
-    }
+    })().catch((err) => console.error('Deadline background check error:', err));
   }
 
   static async listProjects(user: { id: string; role: UserRole }, filters: { status?: ProjectStatus; search?: string }) {

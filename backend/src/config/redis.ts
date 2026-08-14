@@ -39,34 +39,63 @@ try {
   logger.warn(`⚠️ Redis initialization skipped: ${err.message}`);
 }
 
+interface CacheEntry {
+  data: any;
+  expiresAt: number;
+}
+const memoryCache = new Map<string, CacheEntry>();
+
 export const cacheGet = async <T>(key: string): Promise<T | null> => {
-  if (!redisClient || !isRedisConnected) return null;
-  try {
-    const data = await redisClient.get(key);
-    return data ? JSON.parse(data) : null;
-  } catch {
+  if (redisClient && isRedisConnected) {
+    try {
+      const data = await redisClient.get(key);
+      if (data) return JSON.parse(data);
+    } catch {
+      // Fallback to memory cache
+    }
+  }
+
+  const entry = memoryCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    memoryCache.delete(key);
     return null;
   }
+  return entry.data as T;
 };
 
-export const cacheSet = async (key: string, data: any, ttlSeconds: number = 60): Promise<void> => {
-  if (!redisClient || !isRedisConnected) return;
-  try {
-    await redisClient.set(key, JSON.stringify(data), 'EX', ttlSeconds);
-  } catch {
-    // Graceful fallback
+export const cacheSet = async (key: string, data: any, ttlSeconds: number = 30): Promise<void> => {
+  if (redisClient && isRedisConnected) {
+    try {
+      await redisClient.set(key, JSON.stringify(data), 'EX', ttlSeconds);
+    } catch {
+      // Fallback to memory cache
+    }
   }
+
+  memoryCache.set(key, {
+    data,
+    expiresAt: Date.now() + ttlSeconds * 1000,
+  });
 };
 
 export const cacheDelPattern = async (pattern: string): Promise<void> => {
-  if (!redisClient || !isRedisConnected) return;
-  try {
-    const keys = await redisClient.keys(pattern);
-    if (keys.length > 0) {
-      await redisClient.del(...keys);
+  if (redisClient && isRedisConnected) {
+    try {
+      const keys = await redisClient.keys(pattern);
+      if (keys.length > 0) {
+        await redisClient.del(...keys);
+      }
+    } catch {
+      // Fallback to memory cache
     }
-  } catch {
-    // Graceful fallback
+  }
+
+  const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}`);
+  for (const key of memoryCache.keys()) {
+    if (regex.test(key)) {
+      memoryCache.delete(key);
+    }
   }
 };
 
