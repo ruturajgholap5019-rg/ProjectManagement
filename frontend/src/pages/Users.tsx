@@ -493,22 +493,24 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
 
   const { selectedCategory } = useCategoryFilterStore();
 
-  const filteredUsers = users.filter((u) => {
-    if (filterRole !== 'ALL' && u.role !== filterRole) return false;
-    if (selectedCategory) {
-      const hasCatProject = u.projectMemberships?.some((pm) => pm.project?.projectType === selectedCategory);
-      if (!hasCatProject) return false;
-    }
-    if (searchTerm.trim()) {
-      const lower = searchTerm.toLowerCase();
-      const matchesSearch = 
-        u.firstName?.toLowerCase().includes(lower) || 
-        u.lastName?.toLowerCase().includes(lower) || 
-        u.email?.toLowerCase().includes(lower);
-      if (!matchesSearch) return false;
-    }
-    return true;
-  });
+  const filteredUsers = React.useMemo(() => {
+    const lower = searchTerm.toLowerCase().trim();
+    return users.filter((u) => {
+      if (filterRole !== 'ALL' && u.role !== filterRole) return false;
+      if (selectedCategory) {
+        const hasCatProject = u.projectMemberships?.some((pm) => pm.project?.projectType === selectedCategory);
+        if (!hasCatProject) return false;
+      }
+      if (lower) {
+        const matchesSearch = 
+          u.firstName?.toLowerCase().includes(lower) || 
+          u.lastName?.toLowerCase().includes(lower) || 
+          u.email?.toLowerCase().includes(lower);
+        if (!matchesSearch) return false;
+      }
+      return true;
+    });
+  }, [users, filterRole, selectedCategory, searchTerm]);
 
   const targetResetUser = users.find((u) => u.id === resetUserId);
 
@@ -1095,25 +1097,39 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
                                 </div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{u.email}</div>
                                 {u.skills && u.skills.length > 0 && (
-                                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
-                                    {u.skills.slice(0, 4).map((sk) => (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'nowrap', maxWidth: '320px', overflow: 'hidden' }}>
+                                    {u.skills.slice(0, 2).map((sk) => (
                                       <span
                                         key={sk.id}
                                         style={{
-                                          fontSize: '0.72rem',
+                                          fontSize: '0.70rem',
                                           fontWeight: 600,
-                                          color: 'var(--text-muted)',
+                                          color: 'var(--text-secondary)',
                                           backgroundColor: 'var(--bg-main)',
-                                          padding: '2px 8px',
+                                          border: '1px solid var(--border-color)',
+                                          padding: '1px 6px',
                                           borderRadius: 'var(--radius-sm)',
+                                          whiteSpace: 'nowrap',
                                         }}
                                       >
                                         {sk.skillName}
                                       </span>
                                     ))}
-                                    {u.skills.length > 4 && (
-                                      <span style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 700 }}>
-                                        +{u.skills.length - 4} more
+                                    {u.skills.length > 2 && (
+                                      <span
+                                        title={u.skills.map((s) => s.skillName).join(', ')}
+                                        style={{
+                                          fontSize: '0.68rem',
+                                          color: 'var(--primary)',
+                                          fontWeight: 700,
+                                          backgroundColor: 'var(--primary-light)',
+                                          padding: '1px 6px',
+                                          borderRadius: 'var(--radius-sm)',
+                                          whiteSpace: 'nowrap',
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        +{u.skills.length - 2}
                                       </span>
                                     )}
                                   </div>
@@ -1121,14 +1137,14 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
                               </div>
                             </div>
                           </td>
-                          <td style={{ padding: '14px 16px' }}>
+                          <td style={{ padding: '10px 16px' }}>
                             {u.projectMemberships && u.projectMemberships.length > 0 ? (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {u.projectMemberships.slice(0, 3).map((pm, i) => (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
+                                {u.projectMemberships.slice(0, 2).map((pm, i) => (
                                   <div
                                     key={i}
                                     style={{
-                                      fontSize: '0.75rem',
+                                      fontSize: '0.74rem',
                                       fontWeight: 600,
                                       color: 'var(--text-primary)',
                                       backgroundColor: 'var(--bg-main)',
@@ -1136,15 +1152,30 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
                                       borderRadius: 'var(--radius-sm)',
                                       border: '1px solid var(--border-color)',
                                       whiteSpace: 'nowrap',
+                                      maxWidth: '150px',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
                                     }}
                                     title={`${pm.project.name} (${pm.project.projectType || 'PROJECT'})`}
                                   >
-                                    {pm.project.name.length > 20 ? pm.project.name.substring(0, 20) + '...' : pm.project.name}
+                                    {pm.project.name}
                                   </div>
                                 ))}
-                                {u.projectMemberships.length > 3 && (
-                                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700, alignSelf: 'center' }}>
-                                    +{u.projectMemberships.length - 3} more
+                                {u.projectMemberships.length > 2 && (
+                                  <span
+                                    title={u.projectMemberships.map((pm) => pm.project.name).join('\n')}
+                                    style={{
+                                      fontSize: '0.70rem',
+                                      color: 'var(--primary)',
+                                      fontWeight: 700,
+                                      backgroundColor: 'var(--primary-light)',
+                                      padding: '2px 6px',
+                                      borderRadius: 'var(--radius-sm)',
+                                      whiteSpace: 'nowrap',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    +{u.projectMemberships.length - 2}
                                   </span>
                                 )}
                               </div>

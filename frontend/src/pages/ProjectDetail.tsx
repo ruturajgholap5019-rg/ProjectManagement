@@ -157,8 +157,11 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
   const closeAddMemberModal = () => {
     setIsAddMemberOpen(false);
+    setSelectedUserId('');
     if (onToggleFullScreenForm) onToggleFullScreenForm(false);
   };
+
+  const [removeMemberUserId, setRemoveMemberUserId] = useState<string | null>(null);
 
   // New Comment
   const [newComment, setNewComment] = useState('');
@@ -210,7 +213,6 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
-  const [removeMemberUserId, setRemoveMemberUserId] = useState<string | null>(null);
 
   const fetchProjectDetails = async () => {
     setIsLoading(true);
@@ -1058,26 +1060,35 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
             {members.map((m) => {
               const u = m.user || m;
+              const uId = u.id || m.userId || m.id;
               const firstName = u.firstName || 'User';
               const lastName = u.lastName || '';
               const email = u.email || '';
               const initials = `${firstName[0] || 'U'}${lastName[0] || ''}`;
+              const isLead = (uId === project.leadId) || (m.userId === project.leadId);
 
               return (
-                <div key={m.id || m.userId} className="glass-panel hover-lift" style={{ padding: '18px', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div key={uId} className="glass-panel hover-lift" style={{ padding: '18px', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent-purple) 100%)', color: '#fff', fontWeight: 800, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {initials}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{firstName} {lastName}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{firstName} {lastName}</span>
+                        {isLead && <Badge variant="warning" style={{ fontSize: '0.72rem', padding: '1px 6px' }}>👑 Lead</Badge>}
+                      </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{email}</div>
                     </div>
                   </div>
-                  {user?.role === 'ADMIN' && m.userId !== project.leadId && (
-                    <Button size="sm" variant="ghost" onClick={() => setRemoveMemberUserId(m.userId)} title="Remove Member">
-                      <UserX size={16} color="var(--danger)" />
-                    </Button>
+                  {user?.role === 'ADMIN' && (
+                    isLead ? (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Project Lead</span>
+                    ) : (
+                      <Button size="sm" variant="danger" onClick={() => setRemoveMemberUserId(uId)} title="Remove Member">
+                        <UserX size={15} />
+                      </Button>
+                    )
                   )}
                 </div>
               );

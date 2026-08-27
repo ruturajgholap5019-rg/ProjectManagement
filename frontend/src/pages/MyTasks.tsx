@@ -223,43 +223,54 @@ export const MyTasksPage: React.FC<MyTasksPageProps> = ({ onSelectProject }) => 
 
   const { rangeType, startDate, endDate } = useDateFilterStore();
 
-  // Telemetry Calculations
-  const categoryFilteredTasks = tasks.filter((t) => {
-    if (selectedCategory && t.project?.projectType !== selectedCategory) return false;
-    if (rangeType && rangeType !== 'all' && (startDate || endDate)) {
-      const d = t.dueDate ? new Date(t.dueDate) : t.completedAt ? new Date(t.completedAt) : null;
-      if (d) {
-        if (startDate && d < new Date(startDate)) return false;
-        if (endDate && d > new Date(endDate + 'T23:59:59')) return false;
+  // Telemetry & Filter Calculations Memoized
+  const { completedCount, totalCount, progressPercent, projectGroups } = React.useMemo(() => {
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedEndDate = endDate ? new Date(endDate + 'T23:59:59') : null;
+
+    const catTasks = tasks.filter((t) => {
+      if (selectedCategory && t.project?.projectType !== selectedCategory) return false;
+      if (rangeType && rangeType !== 'all' && (parsedStartDate || parsedEndDate)) {
+        const d = t.dueDate ? new Date(t.dueDate) : t.completedAt ? new Date(t.completedAt) : null;
+        if (d) {
+          if (parsedStartDate && d < parsedStartDate) return false;
+          if (parsedEndDate && d > parsedEndDate) return false;
+        }
       }
-    }
-    return true;
-  });
+      return true;
+    });
 
-  const completedCount = categoryFilteredTasks.filter((t) => t.status === 'COMPLETED').length;
-  const totalCount = categoryFilteredTasks.length;
-  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    const doneCount = catTasks.filter((t) => t.status === 'COMPLETED').length;
+    const total = catTasks.length;
+    const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
 
-  const filteredTasks = categoryFilteredTasks.filter((t) => {
-    if (activeTab === 'ALL') return true;
-    if (activeTab === 'COMPLETED') return t.status === 'COMPLETED';
-    return t.status === activeTab;
-  });
+    const fTasks = catTasks.filter((t) => {
+      if (activeTab === 'ALL') return true;
+      if (activeTab === 'COMPLETED') return t.status === 'COMPLETED';
+      return t.status === activeTab;
+    });
 
-  // Group filtered tasks by project
-  const projectGroupMap = filteredTasks.reduce((acc, t) => {
-    const pId = t.project.id;
-    if (!acc[pId]) {
-      acc[pId] = {
-        project: t.project,
-        tasks: [],
-      };
-    }
-    acc[pId].tasks.push(t);
-    return acc;
-  }, {} as Record<string, { project: { id: string; name: string; projectType?: string }; tasks: TaskItem[] }>);
+    const groupMap = fTasks.reduce((acc, t) => {
+      const pId = t.project.id;
+      if (!acc[pId]) {
+        acc[pId] = {
+          project: t.project,
+          tasks: [],
+        };
+      }
+      acc[pId].tasks.push(t);
+      return acc;
+    }, {} as Record<string, { project: { id: string; name: string; projectType?: string }; tasks: TaskItem[] }>);
 
-  const projectGroups = Object.values(projectGroupMap);
+    return {
+      categoryFilteredTasks: catTasks,
+      completedCount: doneCount,
+      totalCount: total,
+      progressPercent: pct,
+      filteredTasks: fTasks,
+      projectGroups: Object.values(groupMap),
+    };
+  }, [tasks, selectedCategory, rangeType, startDate, endDate, activeTab]);
 
   const formatDueDate = (dateStr?: string) => {
     if (!dateStr) return null;

@@ -62,19 +62,24 @@ export class DashboardService {
       },
     });
 
-    const recentProjectsWithStats = await Promise.all(
-      recentProjects.map(async (p: any) => {
-        const completedTasks = await prisma.task.count({
-          where: { projectId: p.id, status: 'COMPLETED' },
-        });
-        return {
-          ...p,
-          totalTasks: p._count.tasks,
-          completedTasks,
-          memberCount: p._count.members,
-        };
-      })
-    );
+    const projectIds = recentProjects.map((p: any) => p.id);
+    const completedCounts = projectIds.length > 0 ? await prisma.task.groupBy({
+      by: ['projectId'],
+      where: {
+        projectId: { in: projectIds },
+        status: 'COMPLETED',
+      },
+      _count: { id: true },
+    }) : [];
+
+    const completedMap = new Map(completedCounts.map((c: any) => [c.projectId, c._count.id]));
+
+    const recentProjectsWithStats = recentProjects.map((p: any) => ({
+      ...p,
+      totalTasks: p._count.tasks,
+      completedTasks: completedMap.get(p.id) || 0,
+      memberCount: p._count.members,
+    }));
 
     const recentActivities = await prisma.activityLog.findMany({
       take: 6,

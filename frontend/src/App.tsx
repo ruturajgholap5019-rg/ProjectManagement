@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
+import { useDateFilterStore } from './store/dateFilterStore';
+import { useCategoryFilterStore } from './store/categoryFilterStore';
+import { apiFetch } from './services/api';
+import { ToastProvider } from './context/ToastContext';
+import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun, Moon, FileText, Search, Bell, X, User as UserIcon, Menu } from 'lucide-react';
+
 import { Login } from './pages/Login';
 import { ChangePasswordModal } from './pages/ChangePasswordModal';
 import { UsersPage } from './pages/Users';
@@ -12,12 +18,7 @@ import { WorkActivitiesPage } from './pages/WorkActivities';
 import { GlobalSearchPage } from './pages/GlobalSearch';
 import { StudentProfilePage } from './pages/StudentProfile';
 import { MyAccountPage } from './pages/MyAccount';
-import { useDateFilterStore } from './store/dateFilterStore';
-import { useCategoryFilterStore } from './store/categoryFilterStore';
 import { CategoryManagerModal } from './components/UI/CategoryManagerModal';
-import { apiFetch } from './services/api';
-import { ToastProvider } from './context/ToastContext';
-import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun, Moon, FileText, Search, Bell, X, User as UserIcon, Menu } from 'lucide-react';
 
 type TabType = 'dashboard' | 'projects' | 'activities' | 'search' | 'tasks' | 'users' | 'students' | 'account';
 
@@ -136,24 +137,38 @@ export const App: React.FC = () => {
   }, [isAuthenticated, user?.role]);
 
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const isHeaderVisibleRef = useRef(true);
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
+    let ticking = false;
 
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+          let nextVisible = isHeaderVisibleRef.current;
 
-      if (currentScrollY <= 15) {
-        setIsHeaderVisible(true);
-      } else if (currentScrollY > lastScrollY && currentScrollY > 70) {
-        // Scrolling Down -> Disappear Navbar
-        setIsHeaderVisible(false);
-      } else if (currentScrollY < lastScrollY) {
-        // Scrolling Up -> Show Navbar
-        setIsHeaderVisible(true);
+          if (currentScrollY <= 15) {
+            nextVisible = true;
+          } else if (currentScrollY > lastScrollY && currentScrollY > 70) {
+            // Scrolling Down -> Disappear Navbar
+            nextVisible = false;
+          } else if (currentScrollY < lastScrollY) {
+            // Scrolling Up -> Show Navbar
+            nextVisible = true;
+          }
+
+          if (nextVisible !== isHeaderVisibleRef.current) {
+            isHeaderVisibleRef.current = nextVisible;
+            setIsHeaderVisible(nextVisible);
+          }
+
+          lastScrollY = currentScrollY;
+          ticking = false;
+        });
+        ticking = true;
       }
-
-      lastScrollY = currentScrollY;
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -915,7 +930,9 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      <CategoryManagerModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} />
+      {isCategoryModalOpen && (
+        <CategoryManagerModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} />
+      )}
     </ToastProvider>
   );
 };

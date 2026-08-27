@@ -13,9 +13,12 @@ export const GlobalSearchPage: React.FC<GlobalSearchPageProps> = ({ initialQuery
   const [results, setResults] = useState<{ members: any[]; projects: any[] } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  const handleSearch = async (searchStr?: string) => {
+  const handleSearch = React.useCallback(async (searchStr?: string) => {
     const q = (searchStr !== undefined ? searchStr : query).trim();
-    if (!q) return;
+    if (!q) {
+      setResults(null);
+      return;
+    }
 
     setIsSearching(true);
     try {
@@ -26,7 +29,7 @@ export const GlobalSearchPage: React.FC<GlobalSearchPageProps> = ({ initialQuery
     } finally {
       setIsSearching(false);
     }
-  };
+  }, [query]);
 
   React.useEffect(() => {
     if (initialQuery) {
@@ -34,6 +37,19 @@ export const GlobalSearchPage: React.FC<GlobalSearchPageProps> = ({ initialQuery
       handleSearch(initialQuery);
     }
   }, [initialQuery]);
+
+  // Real-time debounced search when typing
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (query.trim().length >= 2) {
+        handleSearch(query);
+      } else if (!query.trim()) {
+        setResults(null);
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [query, handleSearch]);
 
   return (
     <div className="animate-fade-in" style={{ padding: '36px', maxWidth: '1280px', margin: '0 auto' }}>

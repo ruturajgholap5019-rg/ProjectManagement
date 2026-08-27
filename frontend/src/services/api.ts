@@ -12,7 +12,9 @@ interface CacheEntry<T> {
 }
 
 const clientCache = new Map<string, CacheEntry<any>>();
-const CACHE_MAX_AGE_MS = 60 * 1000; // 1 minute client cache
+const inFlightRequests = new Map<string, Promise<any>>();
+const CACHE_FRESH_MS = 30 * 1000; // 30 seconds fresh
+const CACHE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes max cache life
 
 export function invalidateApiCache(pattern?: string) {
   if (!pattern) {
@@ -26,6 +28,30 @@ export function invalidateApiCache(pattern?: string) {
   }
 }
 
+function autoInvalidateOnMutation(endpoint: string) {
+  if (endpoint.includes('/tasks') || endpoint.includes('/deliverables')) {
+    invalidateApiCache('/tasks');
+    invalidateApiCache('/dashboard');
+    invalidateApiCache('/projects');
+  } else if (endpoint.includes('/projects')) {
+    invalidateApiCache('/projects');
+    invalidateApiCache('/dashboard');
+  } else if (endpoint.includes('/activities')) {
+    invalidateApiCache('/activities');
+    invalidateApiCache('/dashboard');
+  } else if (endpoint.includes('/users')) {
+    invalidateApiCache('/users');
+    invalidateApiCache('/dashboard');
+  } else if (endpoint.includes('/categories')) {
+    invalidateApiCache('/categories');
+    invalidateApiCache('/dashboard');
+    invalidateApiCache('/projects');
+  } else {
+    // Default fallback: clear dashboard and projects
+    invalidateApiCache('/dashboard');
+  }
+}
+
 export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { requiresAuth = true, headers: customHeaders, ...restOptions } = options;
   const method = (restOptions.method || 'GET').toUpperCase();
@@ -34,8 +60,15 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
   // For GET requests, serve instantly from client cache if available
   if (method === 'GET' && clientCache.has(cacheKey)) {
     const entry = clientCache.get(cacheKey)!;
-    if (Date.now() - entry.timestamp < CACHE_MAX_AGE_MS) {
-      // Trigger non-blocking background refresh to keep cache warm
+    const isFresh = Date.now() - entry.timestamp < CACHE_FRESH_MS;
+    const isUsable = Date.now() - entry.timestamp < CACHE_MAX_AGE_MS;
+
+    if (isFresh) {
+      return entry.data as T;
+    }
+
+    if (isUsable) {
+      // Return stale immediately & trigger background refresh
       (async () => {
         try {
           const authStore = useAuthStore.getState();
@@ -58,7 +91,7 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
             }
           }
         } catch {
-          // Ignore background fetch errors
+          // Ignore background refresh errors
         }
       })();
 
@@ -66,70 +99,85 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
     }
   }
 
-  // Mutating requests invalidate cache
+  // Mutating requests trigger smart targeted cache invalidation
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    invalidateApiCache();
+    autoInvalidateOnMutation(endpoint);
   }
 
-  const authStore = useAuthStore.getState();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(customHeaders as Record<string, string>),
-  };
-
-  if (requiresAuth) {
-    if (authStore.accessToken) {
-      headers['Authorization'] = `Bearer ${authStore.accessToken}`;
-    } else if (!localStorage.getItem('has_logged_in')) {
-      throw new Error('Unauthorized - Please log in');
-    }
+  // Request deduplication for parallel GET requests
+  if (method === 'GET' && inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey)! as Promise<T>;
   }
 
-  let response = await fetch(`${BASE_URL}${endpoint}`, {
-    headers,
-    credentials: 'include',
-    ...restOptions,
-  });
+  const fetchPromise = (async () => {
+    const authStore = useAuthStore.getState();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(customHeaders as Record<string, string>),
+    };
 
-  // Handle Token Refresh on 401 Unauthorized
-  if (response.status === 401 && requiresAuth && !endpoint.includes('/auth/refresh')) {
-    const refreshed = await authStore.refreshSession();
-    if (refreshed) {
-      const newAccessToken = useAuthStore.getState().accessToken;
-      if (newAccessToken) {
-        headers['Authorization'] = `Bearer ${newAccessToken}`;
-        response = await fetch(`${BASE_URL}${endpoint}`, {
-          headers,
-          credentials: 'include',
-          ...restOptions,
-        });
+    if (requiresAuth) {
+      if (authStore.accessToken) {
+        headers['Authorization'] = `Bearer ${authStore.accessToken}`;
+      } else if (!localStorage.getItem('has_logged_in')) {
+        throw new Error('Unauthorized - Please log in');
       }
+    }
+
+    let response = await fetch(`${BASE_URL}${endpoint}`, {
+      headers,
+      credentials: 'include',
+      ...restOptions,
+    });
+
+    // Handle Token Refresh on 401 Unauthorized
+    if (response.status === 401 && requiresAuth && !endpoint.includes('/auth/refresh')) {
+      const refreshed = await authStore.refreshSession();
+      if (refreshed) {
+        const newAccessToken = useAuthStore.getState().accessToken;
+        if (newAccessToken) {
+          headers['Authorization'] = `Bearer ${newAccessToken}`;
+          response = await fetch(`${BASE_URL}${endpoint}`, {
+            headers,
+            credentials: 'include',
+            ...restOptions,
+          });
+        }
+      } else {
+        authStore.logout();
+        throw new Error('Session expired. Please log in again.');
+      }
+    }
+
+    let data: any;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
     } else {
-      authStore.logout();
-      throw new Error('Session expired. Please log in again.');
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`Server error (${response.status}): ${text || response.statusText}`);
+      }
+      data = { data: text };
     }
-  }
 
-  let data: any;
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    data = await response.json();
-  } else {
-    const text = await response.text();
     if (!response.ok) {
-      throw new Error(`Server error (${response.status}): ${text || response.statusText}`);
+      throw new Error(data.message || 'An unexpected error occurred');
     }
-    data = { data: text };
-  }
 
-  if (!response.ok) {
-    throw new Error(data.message || 'An unexpected error occurred');
-  }
+    // Save successful GET response to client cache
+    if (method === 'GET') {
+      clientCache.set(cacheKey, { data: data.data, timestamp: Date.now() });
+    }
 
-  // Save successful GET response to client cache
+    return data.data;
+  })();
+
   if (method === 'GET') {
-    clientCache.set(cacheKey, { data: data.data, timestamp: Date.now() });
+    inFlightRequests.set(cacheKey, fetchPromise);
+    fetchPromise.finally(() => inFlightRequests.delete(cacheKey));
   }
 
-  return data.data;
+  return fetchPromise;
 }
+

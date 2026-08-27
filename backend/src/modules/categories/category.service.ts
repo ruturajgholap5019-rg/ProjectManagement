@@ -16,9 +16,20 @@ const DEFAULT_CATEGORIES = [
 
 export class CategoryService {
   static async listCategories() {
-    return prisma.projectCategory.findMany({
+    let categories = await prisma.projectCategory.findMany({
       orderBy: { sortOrder: 'asc' },
     });
+
+    if (categories.length === 0) {
+      await prisma.projectCategory.createMany({
+        data: DEFAULT_CATEGORIES,
+      });
+      categories = await prisma.projectCategory.findMany({
+        orderBy: { sortOrder: 'asc' },
+      });
+    }
+
+    return categories;
   }
 
   static async createCategory(data: { code: string; name: string; icon?: string; description?: string }) {

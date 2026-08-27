@@ -181,31 +181,37 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
 
   const { rangeType, startDate, endDate } = useDateFilterStore();
 
-  const filteredProjects = projects.filter((p) => {
-    if (selectedCategory && p.projectType !== selectedCategory) {
-      return false;
-    }
-    if (rangeType && rangeType !== 'all' && (startDate || endDate)) {
-      const pDate = new Date(p.createdAt);
-      if (startDate && pDate < new Date(startDate)) return false;
-      if (endDate && pDate > new Date(endDate + 'T23:59:59')) return false;
-    }
-    if (statusFilter) {
-      if (statusFilter === 'ONGOING' || statusFilter === 'ACTIVE') {
-        if (p.status !== 'ONGOING' && p.status !== 'ACTIVE') return false;
-      } else if (p.status !== statusFilter) {
+  const filteredProjects = React.useMemo(() => {
+    const q = search.toLowerCase().trim();
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedEndDate = endDate ? new Date(endDate + 'T23:59:59') : null;
+    const isOngoingStatusFilter = statusFilter === 'ONGOING' || statusFilter === 'ACTIVE';
+
+    return projects.filter((p) => {
+      if (selectedCategory && p.projectType !== selectedCategory) {
         return false;
       }
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase().trim();
-      const matchesName = p.name.toLowerCase().includes(q);
-      const matchesScope = p.scope?.toLowerCase().includes(q);
-      const matchesLead = p.lead ? `${p.lead.firstName} ${p.lead.lastName}`.toLowerCase().includes(q) : false;
-      if (!matchesName && !matchesScope && !matchesLead) return false;
-    }
-    return true;
-  });
+      if (rangeType && rangeType !== 'all' && (parsedStartDate || parsedEndDate)) {
+        const pDate = new Date(p.createdAt);
+        if (parsedStartDate && pDate < parsedStartDate) return false;
+        if (parsedEndDate && pDate > parsedEndDate) return false;
+      }
+      if (statusFilter) {
+        if (isOngoingStatusFilter) {
+          if (p.status !== 'ONGOING' && p.status !== 'ACTIVE') return false;
+        } else if (p.status !== statusFilter) {
+          return false;
+        }
+      }
+      if (q) {
+        const matchesName = p.name.toLowerCase().includes(q);
+        const matchesScope = p.scope?.toLowerCase().includes(q);
+        const matchesLead = p.lead ? `${p.lead.firstName} ${p.lead.lastName}`.toLowerCase().includes(q) : false;
+        if (!matchesName && !matchesScope && !matchesLead) return false;
+      }
+      return true;
+    });
+  }, [projects, selectedCategory, rangeType, startDate, endDate, statusFilter, search]);
 
   // Dedicated Page view for Creating & Assigning New Project
   if (isCreateOpen) {
@@ -378,16 +384,16 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
           </h1>
         </div>
         {user?.role === 'ADMIN' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {onOpenCategoryManager && (
+              <Button size="md" variant="secondary" onClick={onOpenCategoryManager} style={{ fontSize: '0.88rem' }}>
+                <Settings size={16} color="var(--primary)" /> Manage Categories
+              </Button>
+            )}
             <Button variant="gradient" onClick={openCreateForm}>
               <FolderPlus size={18} />
               Create & Assign Project
             </Button>
-            {onOpenCategoryManager && (
-              <Button size="sm" variant="secondary" onClick={onOpenCategoryManager} style={{ fontSize: '0.82rem' }}>
-                <Settings size={14} color="var(--primary)" /> Manage Project Categories
-              </Button>
-            )}
           </div>
         )}
       </div>
@@ -545,7 +551,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
                 className="glass-card hover-lift"
                 onClick={() => onSelectProject?.(p.id)}
                 style={{
-                  padding: '26px',
+                  padding: '20px 22px',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
@@ -575,24 +581,9 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
                   <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.02em' }}>
                     {p.name}
                   </h3>
-                  <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: '1.5', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '6px', lineHeight: '1.5', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {p.scope || p.description || 'No scope details specified.'}
                   </p>
-
-                  {(p.client || p.referencePerson) && (
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', fontSize: '0.8rem' }}>
-                      {p.client && (
-                        <span style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          🏢 Client: {p.client.name}
-                        </span>
-                      )}
-                      {(p.referencePerson || p.client?.referencePerson) && (
-                        <span style={{ backgroundColor: 'var(--bg-main)', color: 'var(--text-secondary)', fontWeight: 600, padding: '3px 10px', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          👨‍🏫 Referred By: {p.referencePerson || p.client?.referencePerson}
-                        </span>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
