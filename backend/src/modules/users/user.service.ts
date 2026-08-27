@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { UserRole, MemberType } from '../../types/enums.js';
 import { prisma } from '../../config/database.js';
 import { AppError } from '../../middlewares/error.middleware.js';
+import { cacheGet, cacheSet, cacheDelPattern } from '../../config/redis.js';
 
 export interface CreateUserInput {
   email: string;
@@ -127,6 +128,10 @@ export class UserService {
     const limit = query.limit && query.limit > 0 ? Number(query.limit) : undefined;
     const skip = page && limit ? (page - 1) * limit : undefined;
 
+    const cacheKey = `users:${query.role || 'all'}:${query.active ?? 'all'}:${query.search || 'none'}:${page || 1}:${limit || 50}`;
+    const cached = await cacheGet<any>(cacheKey);
+    if (cached) return cached;
+
     const [total, users] = await Promise.all([
       prisma.user.count({ where }),
       prisma.user.findMany({
@@ -164,19 +169,20 @@ export class UserService {
       }),
     ]);
 
-    if (page && limit) {
-      return {
-        users,
-        meta: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-      };
-    }
+    const result = page && limit
+      ? {
+          users,
+          meta: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        }
+      : users;
 
-    return users;
+    await cacheSet(cacheKey, result, 20);
+    return result;
   }
 
   static async getUserById(userId: string) {

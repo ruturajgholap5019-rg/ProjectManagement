@@ -1,21 +1,22 @@
 import { prisma } from '../../config/database.js';
 import { AppError } from '../../middlewares/error.middleware.js';
+import { cacheGet, cacheSet, cacheDelPattern } from '../../config/redis.js';
 
 // Category Management Service
 
 const DEFAULT_CATEGORIES = [
-  { code: 'WEBSITE_WEBAPP', name: 'Website / Web App', icon: '🖥️', sortOrder: 1 },
-  { code: 'MOBILE_APP', name: 'Mobile Application', icon: '📱', sortOrder: 2 },
-  { code: 'BMS', name: 'Enterprise System (BMS)', icon: '🏢', sortOrder: 3 },
-  { code: 'UNIVERSITY_NEP', name: 'University / NEP Platform', icon: '🎓', sortOrder: 4 },
-  { code: 'DESIGN_SOCIAL_MEDIA', name: 'Design & Social Media', icon: '🎨', sortOrder: 5 },
-  { code: 'PODCAST_MEDIA', name: 'Podcast & Media', icon: '🎙️', sortOrder: 6 },
-  { code: 'RESEARCH', name: 'Digital Research', icon: '🔬', sortOrder: 7 },
-  { code: 'OTHER', name: 'Other Projects', icon: '📁', sortOrder: 8 },
+  { code: 'PROJECT_DEVELOPMENT', name: 'Project Development', icon: '💻', sortOrder: 1 },
+  { code: 'LIVE_STREAMING', name: 'Live Streaming', icon: '📡', sortOrder: 2 },
+  { code: 'PODCAST_MEDIA', name: 'Podcast & Media', icon: '🎙️', sortOrder: 3 },
+  { code: 'BMM_BMS_PROJECT', name: 'BMM & BMS Enterprise Project', icon: '🏢', sortOrder: 4 },
+  { code: 'AI_INNOVATION', name: 'AI & Smart Systems', icon: '🤖', sortOrder: 5 },
 ];
 
 export class CategoryService {
   static async listCategories() {
+    const cached = await cacheGet<any[]>('categories:all');
+    if (cached) return cached;
+
     let categories = await prisma.projectCategory.findMany({
       orderBy: { sortOrder: 'asc' },
     });
@@ -29,6 +30,7 @@ export class CategoryService {
       });
     }
 
+    await cacheSet('categories:all', categories, 60);
     return categories;
   }
 
@@ -48,7 +50,7 @@ export class CategoryService {
 
     const count = await prisma.projectCategory.count();
 
-    return prisma.projectCategory.create({
+    const created = await prisma.projectCategory.create({
       data: {
         code: data.code.trim().toUpperCase().replace(/\s+/g, '_'),
         name: data.name.trim(),
@@ -57,6 +59,9 @@ export class CategoryService {
         sortOrder: count + 1,
       },
     });
+
+    await cacheDelPattern('categories*');
+    return created;
   }
 
   static async updateCategory(id: string, data: { code?: string; name?: string; icon?: string; description?: string; sortOrder?: number }) {
