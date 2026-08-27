@@ -257,7 +257,7 @@ export class ProjectService {
       memberCount: p._count.members,
     }));
 
-    await cacheSet(cacheKey, result, 15);
+    await cacheSet(cacheKey, result, 600);
     return result;
   }
 

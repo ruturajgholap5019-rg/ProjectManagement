@@ -30,7 +30,7 @@ export class CategoryService {
       });
     }
 
-    await cacheSet('categories:all', categories, 60);
+    await cacheSet('categories:all', categories, 600);
     return categories;
   }
 

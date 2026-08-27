@@ -181,7 +181,7 @@ export class UserService {
         }
       : users;
 
-    await cacheSet(cacheKey, result, 20);
+    await cacheSet(cacheKey, result, 600);
     return result;
   }
 

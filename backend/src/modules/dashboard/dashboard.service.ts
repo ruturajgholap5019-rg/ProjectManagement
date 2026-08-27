@@ -17,7 +17,7 @@ export class DashboardService {
       result = await this.getMemberDashboard(user.id, pWhere);
     }
 
-    await cacheSet(cacheKey, result, 15);
+    await cacheSet(cacheKey, result, 600);
     return result;
   }
 

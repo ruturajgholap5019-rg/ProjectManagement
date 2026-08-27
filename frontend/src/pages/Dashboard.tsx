@@ -33,8 +33,8 @@ export const DashboardPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDashboard = async () => {
-      if (!dashboardData) {
+    const fetchDashboard = async (forceRefresh: boolean = false) => {
+      if (!dashboardData && !forceRefresh) {
         setIsLoading(true);
       }
       try {
@@ -54,6 +54,13 @@ export const DashboardPage: React.FC = () => {
     };
 
     fetchDashboard();
+
+    // 10-minute auto-refresh interval
+    const interval = setInterval(() => {
+      fetchDashboard(true);
+    }, 10 * 60 * 1000);
+
+    return () => clearInterval(interval);
   }, [user, selectedCategory, rangeType, startDate, endDate]);
 
   if (isLoading && !dashboardData) {

@@ -13,8 +13,8 @@ interface CacheEntry<T> {
 
 const clientCache = new Map<string, CacheEntry<any>>();
 const inFlightRequests = new Map<string, Promise<any>>();
-const CACHE_FRESH_MS = 30 * 1000; // 30 seconds fresh
-const CACHE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes max cache life
+const CACHE_FRESH_MS = 10 * 60 * 1000; // 10 minutes fresh
+const CACHE_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes max cache life
 
 export function invalidateApiCache(pattern?: string) {
   if (!pattern) {
