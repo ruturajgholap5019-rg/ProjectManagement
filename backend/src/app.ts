@@ -33,7 +33,7 @@ app.use(
 );
 app.use(
   cors({
-    origin: env.CORS_ORIGIN,
+    origin: (origin, callback) => callback(null, true),
     credentials: true,
   })
 );
@@ -50,7 +50,7 @@ app.use(cookieParser());
 // Rate Limiting — Auth Endpoints
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 login attempts per window per IP
+  max: 50, // 50 login attempts per window per IP
   message: { success: false, message: 'Too many login attempts. Please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
