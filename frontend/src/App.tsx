@@ -3,7 +3,7 @@ import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useDateFilterStore } from './store/dateFilterStore';
 import { useCategoryFilterStore } from './store/categoryFilterStore';
-import { apiFetch } from './services/api';
+import { apiFetch, prefetchEndpoint } from './services/api';
 import { ToastProvider } from './context/ToastContext';
 import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun, Moon, FileText, Search, Bell, X, User as UserIcon, Menu } from 'lucide-react';
 
@@ -135,6 +135,40 @@ export const App: React.FC = () => {
       };
     }
   }, [isAuthenticated, user?.role]);
+
+  // Non-blocking Background Idle Prefetcher (Runs 1.5s after Dashboard renders)
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    const timer = setTimeout(() => {
+      const runWhenIdle = (fn: () => void, delayMs: number) => {
+        setTimeout(() => {
+          if ('requestIdleCallback' in window) {
+            (window as any).requestIdleCallback(() => fn());
+          } else {
+            fn();
+          }
+        }, delayMs);
+      };
+
+      // 1. Pre-warm categories
+      runWhenIdle(() => prefetchEndpoint('/categories'), 0);
+
+      // 2. Pre-warm projects list (staggered 500ms)
+      runWhenIdle(() => prefetchEndpoint('/projects'), 500);
+
+      // 3. Pre-warm users / tasks (staggered 1000ms)
+      runWhenIdle(() => {
+        if (user.role === 'ADMIN') {
+          prefetchEndpoint('/users');
+        } else {
+          prefetchEndpoint('/tasks/my');
+        }
+      }, 1000);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, user]);
 
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const isHeaderVisibleRef = useRef(true);
@@ -335,6 +369,7 @@ export const App: React.FC = () => {
           <nav style={{ flex: 1, padding: '22px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <button
               onClick={() => navigateTo('dashboard')}
+              onMouseEnter={() => prefetchEndpoint('/dashboard')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -359,6 +394,7 @@ export const App: React.FC = () => {
 
             <button
               onClick={() => navigateTo('projects')}
+              onMouseEnter={() => prefetchEndpoint('/projects')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -383,6 +419,7 @@ export const App: React.FC = () => {
 
             <button
               onClick={() => navigateTo('activities')}
+              onMouseEnter={() => prefetchEndpoint('/activities')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -407,6 +444,7 @@ export const App: React.FC = () => {
 
             <button
               onClick={() => navigateTo('tasks')}
+              onMouseEnter={() => prefetchEndpoint('/tasks/my')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -432,6 +470,7 @@ export const App: React.FC = () => {
             {user.role === 'ADMIN' && (
               <button
                 onClick={() => navigateTo('users')}
+                onMouseEnter={() => prefetchEndpoint('/users')}
                 style={{
                   display: 'flex',
                   alignItems: 'center',

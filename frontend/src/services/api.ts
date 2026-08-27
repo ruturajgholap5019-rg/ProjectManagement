@@ -28,6 +28,24 @@ export function invalidateApiCache(pattern?: string) {
   }
 }
 
+/**
+ * Non-blocking prefetch helper that pre-warms the client cache during browser idle time
+ */
+export function prefetchEndpoint(endpoint: string) {
+  if (clientCache.has(endpoint)) {
+    const entry = clientCache.get(endpoint)!;
+    if (Date.now() - entry.timestamp < CACHE_FRESH_MS) {
+      return; // Already fresh in memory, zero network needed
+    }
+  }
+
+  if (!inFlightRequests.has(endpoint)) {
+    apiFetch(endpoint).catch(() => {
+      // Silently ignore background prefetch errors
+    });
+  }
+}
+
 function autoInvalidateOnMutation(endpoint: string) {
   if (endpoint.includes('/tasks') || endpoint.includes('/deliverables')) {
     invalidateApiCache('/tasks');
