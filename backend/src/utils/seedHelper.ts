@@ -28,94 +28,108 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
       },
     });
 
-    // 2. Default Student User
-    const student = await prisma.user.create({
-      data: {
-        email: 'student@organization.com',
-        passwordHash: commonPassword,
-        rawPassword: 'Password123!',
-        firstName: 'Alex',
-        lastName: 'Rivers',
-        role: 'TEAM_MEMBER',
-        memberType: 'STUDENT',
-        isActive: true,
-        mustChangePassword: false,
-      },
-    });
-
-    // 3. Indian Team Members
-    const dummyUserData = [
-      { firstName: 'Ruturaj', lastName: 'Gholap', email: 'ruturaj.gholap@organization.com', phone: '9876543210' },
-      { firstName: 'Omkar', lastName: 'Sonawane', email: 'omkar.sonawane@organization.com', phone: '9876543211' },
-      { firstName: 'Priya', lastName: 'Sharma', email: 'priya.sharma@organization.com', phone: '9876543212' },
-      { firstName: 'Rahul', lastName: 'Verma', email: 'rahul.verma@organization.com', phone: '9876543213' },
-      { firstName: 'Ananya', lastName: 'Deshmukh', email: 'ananya.deshmukh@organization.com', phone: '9876543214' },
-      { firstName: 'Siddharth', lastName: 'Patil', email: 'siddharth.patil@organization.com', phone: '9876543215' },
+    // 2. Categories
+    const categoriesData = [
+      { code: 'PROJECT_DEVELOPMENT', name: 'Project Development', icon: '💻', sortOrder: 1 },
+      { code: 'LIVE_STREAMING', name: 'Live Streaming', icon: '📡', sortOrder: 2 },
+      { code: 'PODCAST_MEDIA', name: 'Podcast & Media', icon: '🎙️', sortOrder: 3 },
+      { code: 'BMM_BMS_PROJECT', name: 'BMM & BMS Enterprise Project', icon: '🏢', sortOrder: 4 },
+      { code: 'AI_INNOVATION', name: 'AI & Smart Systems', icon: '🤖', sortOrder: 5 },
     ];
 
-    const createdUsers = [admin, student];
-    for (const u of dummyUserData) {
+    for (const cat of categoriesData) {
+      await prisma.projectCategory.create({ data: cat }).catch(() => {});
+    }
+
+    // 3. Team Members (Sahil, Rahul, Pratik, Soham, Tejas, Nishant, Vaibhav)
+    const membersData = [
+      { firstName: 'Sahil', lastName: 'Patil', email: 'sahil.patil@organization.com', phone: '9876543201', skills: 'React.js, Node.js, Next.js, TypeScript' },
+      { firstName: 'Rahul', lastName: 'Sharma', email: 'rahul.sharma@organization.com', phone: '9876543202', skills: 'Python, PyTorch, LLM Fine-tuning, FastAPI' },
+      { firstName: 'Pratik', lastName: 'Deshmukh', email: 'pratik.deshmukh@organization.com', phone: '9876543203', skills: 'PostgreSQL, Express.js, Inventory ERP, React' },
+      { firstName: 'Soham', lastName: 'Joshi', email: 'soham.joshi@organization.com', phone: '9876543204', skills: 'OBS Studio, Video Editing, Audio Engineering, WebRTC' },
+      { firstName: 'Tejas', lastName: 'Kulkarni', email: 'tejas.kulkarni@organization.com', phone: '9876543205', skills: 'Flutter, Mobile App Dev, UI/UX Design, Firebase' },
+      { firstName: 'Nishant', lastName: 'More', email: 'nishant.more@organization.com', phone: '9876543206', skills: 'DevOps, Docker, CI/CD, Cloud Architecture' },
+      { firstName: 'Vaibhav', lastName: 'Shinde', email: 'vaibhav.shinde@organization.com', phone: '9876543207', skills: 'QA Automation, Cypress, API Testing, Security' },
+    ];
+
+    const createdUsers: Record<string, any> = {};
+    for (const m of membersData) {
       const user = await prisma.user.create({
         data: {
-          email: u.email,
+          email: m.email,
           passwordHash: commonPassword,
           rawPassword: 'Password123!',
-          firstName: u.firstName,
-          lastName: u.lastName,
-          phone: u.phone,
+          firstName: m.firstName,
+          lastName: m.lastName,
+          phone: m.phone,
           role: 'TEAM_MEMBER',
           memberType: 'STUDENT',
           isActive: true,
           mustChangePassword: false,
+          skills: {
+            create: m.skills.split(', ').map((sk) => ({ skillName: sk })),
+          },
         },
       });
-      createdUsers.push(user);
+      createdUsers[m.firstName.toLowerCase()] = user;
     }
 
     // 4. Initial Projects
     const sampleProjects = [
       {
-        name: 'Web Deployment Initiative 18',
-        description: 'End-to-end delivery of Web Deployment requirements including testing and deployment.',
-        scope: 'Production deployment architecture, CI/CD pipeline setup, and staging validation.',
-        projectType: 'WEB_DEPLOYMENT',
+        name: 'VSS Project Tracker',
+        description: 'Centralized engineering and digital team project management platform with real-time tracking.',
+        scope: 'Interactive Kanban board, deliverable milestones, automated Resend email notifications, and PDF executive reports.',
+        projectType: 'PROJECT_DEVELOPMENT',
         priority: 'HIGH',
         status: 'ONGOING',
-        referencePerson: 'Tushar Sir',
-        leadId: createdUsers[2]?.id,
+        leadId: createdUsers['sahil']?.id,
         createdBy: admin.id,
+        members: [createdUsers['nishant']?.id, createdUsers['vaibhav']?.id],
       },
       {
-        name: 'AI/ML Initiative 20',
-        description: 'Machine learning model pipeline and automated analytics.',
-        scope: 'Model training, dataset evaluation, and prediction API endpoints.',
-        projectType: 'AI_ML',
+        name: 'Deepentra AI',
+        description: 'Generative AI platform delivering contextual embeddings, LLM orchestration, and smart automation.',
+        scope: 'Document vector indexing, retrieval-augmented generation (RAG) engine, and conversational web API.',
+        projectType: 'AI_INNOVATION',
         priority: 'CRITICAL',
         status: 'ONGOING',
-        referencePerson: 'Prof. Kulkarni',
-        leadId: createdUsers[3]?.id,
+        leadId: createdUsers['rahul']?.id,
         createdBy: admin.id,
+        members: [createdUsers['tejas']?.id, createdUsers['sahil']?.id],
       },
       {
-        name: 'App Development Initiative 19',
-        description: 'Cross-platform mobile application development with React Native.',
-        scope: 'Authentication flow, dashboard screens, and offline sync module.',
-        projectType: 'APP_DEVELOPMENT',
-        priority: 'MEDIUM',
-        status: 'COMPLETED',
-        referencePerson: 'Dr. Sharma',
-        leadId: createdUsers[4]?.id,
+        name: 'Inventory Management System',
+        description: 'Enterprise ERP inventory system with barcode tracking, asset auditing, and stock automation.',
+        scope: 'Real-time stock alerts, vendor purchase order workflows, warehouse distribution logs, and exportable audit summaries.',
+        projectType: 'BMM_BMS_PROJECT',
+        priority: 'HIGH',
+        status: 'ONGOING',
+        leadId: createdUsers['pratik']?.id,
         createdBy: admin.id,
+        members: [createdUsers['vaibhav']?.id, createdUsers['nishant']?.id],
+      },
+      {
+        name: 'Dadionthetrails Project',
+        description: 'Outdoor adventure live broadcasting, podcast production, and multi-channel content streaming.',
+        scope: '4K low-latency streaming infrastructure, podcast audio master post-production, interactive fan chat integration.',
+        projectType: 'LIVE_STREAMING',
+        priority: 'MEDIUM',
+        status: 'ONGOING',
+        leadId: createdUsers['soham']?.id,
+        createdBy: admin.id,
+        members: [createdUsers['tejas']?.id, createdUsers['sahil']?.id],
       },
     ];
 
     for (const p of sampleProjects) {
+      const { members, ...projData } = p;
       await prisma.project.create({
         data: {
-          ...p,
+          ...projData,
           members: {
-            create: createdUsers.slice(1).map(u => ({ userId: u.id }))
-          }
+            create: members.filter(Boolean).map((userId) => ({ userId })),
+          },
         },
       });
     }
