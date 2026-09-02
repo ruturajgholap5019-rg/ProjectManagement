@@ -41,6 +41,21 @@ export class TaskService {
       }
     }
 
+    if (input.coAssigneeId) {
+      const isMember = await ProjectMember.findOne({
+        projectId: input.projectId,
+        userId: input.coAssigneeId,
+      });
+      const isLead = project.leadId === input.coAssigneeId;
+      if (!isMember && !isLead) {
+        throw new AppError('Co-assignee must be a member of the project.', 400);
+      }
+    }
+
+    if (input.assigneeId && input.coAssigneeId && input.assigneeId === input.coAssigneeId) {
+      throw new AppError('Assignee and co-assignee must be different users.', 400);
+    }
+
     const task = await Task.create({
       projectId: input.projectId,
       milestoneId: input.milestoneId || null,
@@ -63,7 +78,6 @@ export class TaskService {
       task.milestoneId ? Milestone.findById(task.milestoneId, 'name _id').lean() : null,
     ]);
 
-    // Send email notification to assigned team member
     if (assignee && (assignee as any).email) {
       const { emailService } = await import('../../services/email.service.js');
       try {
@@ -97,7 +111,7 @@ export class TaskService {
     if (filters.assigneeId) query.assigneeId = filters.assigneeId;
     if (filters.status) query.status = filters.status;
     if (filters.milestoneId) query.milestoneId = filters.milestoneId;
-    if (filters.search) query.title = new RegExp(filters.search, 'i');
+    if (filters.search) query.title = new RegExp(filters.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
     const tasks = await Task.find(query).sort({ dueDate: 1, createdAt: -1 }).lean();
     const taskIds = tasks.map((t: any) => t._id);
@@ -252,7 +266,7 @@ export class TaskService {
       dependsOn: depTaskMap.get(d.dependsOnId) || null,
     }));
 
-    const incompleteDeps = formattedDeps.filter((d: any) => d.dependsOn && d.dependsOn.status !== 'COMPLETED');
+    const incompleteDeps = formattedDeps.filter((d: any) => d.dependsOn && d.dependsOn.status !== TaskStatus.COMPLETED);
     const isDependencyBlocked = incompleteDeps.length > 0;
 
     return {
@@ -337,6 +351,11 @@ export class TaskService {
       throw new AppError('Only the assignee, Project Lead, or Admin can edit task details.', 403);
     }
 
+    const previousAssigneeId = task.assigneeId;
+    const previousCoAssigneeId = task.coAssigneeId;
+    const assigneeChanged = input.assigneeId !== undefined && input.assigneeId !== previousAssigneeId;
+    const coAssigneeChanged = input.coAssigneeId !== undefined && input.coAssigneeId !== previousCoAssigneeId;
+
     if (input.title !== undefined) task.title = input.title.trim();
     if (input.description !== undefined) task.description = input.description.trim() || null;
     if (input.priority !== undefined) task.priority = input.priority;
@@ -344,34 +363,42 @@ export class TaskService {
     if (input.startDate !== undefined) task.startDate = input.startDate ? new Date(input.startDate) : null;
     if (input.dueDate !== undefined) task.dueDate = input.dueDate ? new Date(input.dueDate) : null;
 
-    if (input.assigneeId !== undefined && input.assigneeId !== task.assigneeId) {
-      if (input.assigneeId) {
-        const isMember = await ProjectMember.findOne({
-          projectId: task.projectId,
-          userId: input.assigneeId,
-        });
-        const isProjectLead = project.leadId === input.assigneeId;
-        if (!isMember && !isProjectLead) {
-          throw new AppError('Assignee must be a member of the project.', 400);
-        }
+    if (assigneeChanged && input.assigneeId) {
+      const isMember = await ProjectMember.findOne({
+        projectId: task.projectId,
+        userId: input.assigneeId,
+      });
+      const isProjectLead = project.leadId === input.assigneeId;
+      if (!isMember && !isProjectLead) {
+        throw new AppError('Assignee must be a member of the project.', 400);
       }
-      task.assigneeId = input.assigneeId || null;
-      task.assignedBy = user.id;
-      task.assignedAt = new Date();
     }
 
-    if (input.coAssigneeId !== undefined && input.coAssigneeId !== task.coAssigneeId) {
-      if (input.coAssigneeId) {
-        const isMember = await ProjectMember.findOne({
-          projectId: task.projectId,
-          userId: input.coAssigneeId,
-        });
-        const isProjectLead = project.leadId === input.coAssigneeId;
-        if (!isMember && !isProjectLead) {
-          throw new AppError('Co-Assignee must be a member of the project.', 400);
-        }
+    if (coAssigneeChanged && input.coAssigneeId) {
+      const isMember = await ProjectMember.findOne({
+        projectId: task.projectId,
+        userId: input.coAssigneeId,
+      });
+      const isProjectLead = project.leadId === input.coAssigneeId;
+      if (!isMember && !isProjectLead) {
+        throw new AppError('Co-assignee must be a member of the project.', 400);
       }
+    }
+
+    const nextAssigneeId = input.assigneeId !== undefined ? (input.assigneeId || null) : previousAssigneeId;
+    const nextCoAssigneeId = input.coAssigneeId !== undefined ? (input.coAssigneeId || null) : previousCoAssigneeId;
+    if (nextAssigneeId && nextCoAssigneeId && nextAssigneeId === nextCoAssigneeId) {
+      throw new AppError('Assignee and co-assignee must be different users.', 400);
+    }
+
+    if (input.assigneeId !== undefined) {
+      task.assigneeId = input.assigneeId || null;
+    }
+    if (input.coAssigneeId !== undefined) {
       task.coAssigneeId = input.coAssigneeId || null;
+    }
+
+    if (assigneeChanged || coAssigneeChanged) {
       task.assignedBy = user.id;
       task.assignedAt = new Date();
     }
@@ -384,12 +411,11 @@ export class TaskService {
       action: 'TASK_UPDATED',
       projectId: task.projectId,
       taskId,
-      details: { updatedFields: Object.keys(input) },
+      details: { updatedFields: Object.keys(input), assigneeChanged, coAssigneeChanged },
     });
 
-    // Send email notification to new assignee if assignee changed
-    if (input.assigneeId && input.assigneeId !== task.assigneeId) {
-      const newAssignee = await User.findById(input.assigneeId);
+    if (assigneeChanged && task.assigneeId) {
+      const newAssignee = await User.findById(task.assigneeId);
       if (newAssignee && newAssignee.email) {
         const { emailService } = await import('../../services/email.service.js');
         try {
@@ -416,19 +442,33 @@ export class TaskService {
       throw new AppError('A task cannot depend on itself.', 400);
     }
 
+    const [task, targetTask] = await Promise.all([
+      Task.findById(taskId, '_id projectId').lean(),
+      Task.findById(dependsOnId, '_id projectId').lean(),
+    ]);
+    if (!task || !targetTask) throw new AppError('Both tasks must exist before adding a dependency.', 404);
+    if (task.projectId !== targetTask.projectId) {
+      throw new AppError('Tasks can only depend on tasks in the same project.', 400);
+    }
+
+    const existing = await TaskDependency.findOne({ taskId, dependsOnId }).lean();
+    if (existing) {
+      throw new AppError('This dependency already exists.', 409);
+    }
+
     const wouldCreateCycle = await this.detectCycle(taskId, dependsOnId);
     if (wouldCreateCycle) {
       throw new AppError('Circular dependency detected! Adding this dependency would create a cycle loop.', 400);
     }
 
     const dep = await TaskDependency.create({ taskId, dependsOnId });
-    const targetTask = await Task.findById(dependsOnId, 'title status _id').lean();
+    const dependencyTarget = await Task.findById(dependsOnId, 'title status _id').lean();
 
     return {
       id: dep._id,
       taskId: dep.taskId,
       dependsOnId: dep.dependsOnId,
-      dependsOn: targetTask ? { id: (targetTask as any)._id, title: (targetTask as any).title, status: (targetTask as any).status } : null,
+      dependsOn: dependencyTarget ? { id: (dependencyTarget as any)._id, title: (dependencyTarget as any).title, status: (dependencyTarget as any).status } : null,
     };
   }
 
@@ -493,6 +533,7 @@ export class TaskService {
     });
     await Comment.deleteMany({ taskId });
     await ActivityLog.deleteMany({ taskId });
+    await Task.deleteMany({ parentTaskId: taskId });
     await Task.findByIdAndDelete(taskId);
 
     return { message: 'Task deleted successfully' };
