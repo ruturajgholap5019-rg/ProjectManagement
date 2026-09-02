@@ -30,6 +30,10 @@ export class TaskService {
     const project = await Project.findById(input.projectId);
     if (!project) throw new AppError('Project not found', 404);
 
+    if (input.assigneeId && input.coAssigneeId && input.assigneeId === input.coAssigneeId) {
+      throw new AppError('Assignee and co-assignee cannot be the same user.', 400);
+    }
+
     if (input.assigneeId) {
       const isMember = await ProjectMember.findOne({
         projectId: input.projectId,
@@ -38,6 +42,17 @@ export class TaskService {
       const isLead = project.leadId === input.assigneeId;
       if (!isMember && !isLead) {
         throw new AppError('Assignee must be a member of the project.', 400);
+      }
+    }
+
+    if (input.coAssigneeId) {
+      const isCoMember = await ProjectMember.findOne({
+        projectId: input.projectId,
+        userId: input.coAssigneeId,
+      });
+      const isCoLead = project.leadId === input.coAssigneeId;
+      if (!isCoMember && !isCoLead) {
+        throw new AppError('Co-assignee must be a member of the project.', 400);
       }
     }
 
@@ -252,7 +267,7 @@ export class TaskService {
       dependsOn: depTaskMap.get(d.dependsOnId) || null,
     }));
 
-    const incompleteDeps = formattedDeps.filter((d: any) => d.dependsOn && d.dependsOn.status !== 'COMPLETED');
+    const incompleteDeps = formattedDeps.filter((d: any) => d.dependsOn && d.dependsOn.status !== TaskStatus.COMPLETED);
     const isDependencyBlocked = incompleteDeps.length > 0;
 
     return {
@@ -337,6 +352,16 @@ export class TaskService {
       throw new AppError('Only the assignee, Project Lead, or Admin can edit task details.', 403);
     }
 
+    const previousAssigneeId = task.assigneeId;
+    const previousCoAssigneeId = task.coAssigneeId;
+
+    const targetAssigneeId = input.assigneeId !== undefined ? input.assigneeId : task.assigneeId;
+    const targetCoAssigneeId = input.coAssigneeId !== undefined ? input.coAssigneeId : task.coAssigneeId;
+
+    if (targetAssigneeId && targetCoAssigneeId && targetAssigneeId === targetCoAssigneeId) {
+      throw new AppError('Assignee and co-assignee cannot be the same user.', 400);
+    }
+
     if (input.title !== undefined) task.title = input.title.trim();
     if (input.description !== undefined) task.description = input.description.trim() || null;
     if (input.priority !== undefined) task.priority = input.priority;
@@ -344,7 +369,9 @@ export class TaskService {
     if (input.startDate !== undefined) task.startDate = input.startDate ? new Date(input.startDate) : null;
     if (input.dueDate !== undefined) task.dueDate = input.dueDate ? new Date(input.dueDate) : null;
 
-    if (input.assigneeId !== undefined && input.assigneeId !== task.assigneeId) {
+    let assigneeChanged = false;
+
+    if (input.assigneeId !== undefined && input.assigneeId !== previousAssigneeId) {
       if (input.assigneeId) {
         const isMember = await ProjectMember.findOne({
           projectId: task.projectId,
@@ -358,9 +385,10 @@ export class TaskService {
       task.assigneeId = input.assigneeId || null;
       task.assignedBy = user.id;
       task.assignedAt = new Date();
+      assigneeChanged = true;
     }
 
-    if (input.coAssigneeId !== undefined && input.coAssigneeId !== task.coAssigneeId) {
+    if (input.coAssigneeId !== undefined && input.coAssigneeId !== previousCoAssigneeId) {
       if (input.coAssigneeId) {
         const isMember = await ProjectMember.findOne({
           projectId: task.projectId,
@@ -388,8 +416,8 @@ export class TaskService {
     });
 
     // Send email notification to new assignee if assignee changed
-    if (input.assigneeId && input.assigneeId !== task.assigneeId) {
-      const newAssignee = await User.findById(input.assigneeId);
+    if (assigneeChanged && task.assigneeId) {
+      const newAssignee = await User.findById(task.assigneeId);
       if (newAssignee && newAssignee.email) {
         const { emailService } = await import('../../services/email.service.js');
         try {
@@ -416,19 +444,35 @@ export class TaskService {
       throw new AppError('A task cannot depend on itself.', 400);
     }
 
+    const [sourceTask, targetTask] = await Promise.all([
+      Task.findById(taskId),
+      Task.findById(dependsOnId),
+    ]);
+
+    if (!sourceTask) throw new AppError('Source task not found', 404);
+    if (!targetTask) throw new AppError('Dependency target task not found', 404);
+
+    if (sourceTask.projectId !== targetTask.projectId) {
+      throw new AppError('Tasks must belong to the same project to create a dependency.', 400);
+    }
+
+    const existingDep = await TaskDependency.findOne({ taskId, dependsOnId });
+    if (existingDep) {
+      throw new AppError('This task dependency already exists.', 400);
+    }
+
     const wouldCreateCycle = await this.detectCycle(taskId, dependsOnId);
     if (wouldCreateCycle) {
       throw new AppError('Circular dependency detected! Adding this dependency would create a cycle loop.', 400);
     }
 
     const dep = await TaskDependency.create({ taskId, dependsOnId });
-    const targetTask = await Task.findById(dependsOnId, 'title status _id').lean();
 
     return {
       id: dep._id,
       taskId: dep.taskId,
       dependsOnId: dep.dependsOnId,
-      dependsOn: targetTask ? { id: (targetTask as any)._id, title: (targetTask as any).title, status: (targetTask as any).status } : null,
+      dependsOn: { id: targetTask._id, title: targetTask.title, status: targetTask.status },
     };
   }
 
@@ -488,12 +532,19 @@ export class TaskService {
       throw new AppError('Only the assigned member, Project Lead, or Administrator can delete project tasks.', 403);
     }
 
+    // Find all child subtasks
+    const subtasks = await Task.find({ parentTaskId: taskId }, '_id').lean();
+    const allTaskIdsToDelete = [taskId, ...subtasks.map((st: any) => st._id)];
+
     await TaskDependency.deleteMany({
-      $or: [{ taskId }, { dependsOnId: taskId }],
+      $or: [
+        { taskId: { $in: allTaskIdsToDelete } },
+        { dependsOnId: { $in: allTaskIdsToDelete } },
+      ],
     });
-    await Comment.deleteMany({ taskId });
-    await ActivityLog.deleteMany({ taskId });
-    await Task.findByIdAndDelete(taskId);
+    await Comment.deleteMany({ taskId: { $in: allTaskIdsToDelete } });
+    await ActivityLog.deleteMany({ taskId: { $in: allTaskIdsToDelete } });
+    await Task.deleteMany({ _id: { $in: allTaskIdsToDelete } });
 
     return { message: 'Task deleted successfully' };
   }
