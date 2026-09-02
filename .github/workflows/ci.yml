@@ -12,6 +12,11 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      NODE_ENV: test
+      DATABASE_URL: mongodb://127.0.0.1:27017/project-management-ci
+      JWT_ACCESS_SECRET: ci-access-secret-123456
+      JWT_REFRESH_SECRET: ci-refresh-secret-123456
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
