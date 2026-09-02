@@ -7,7 +7,7 @@ A high-quality, production-ready Project Tracker and Team Management System cust
 ## 🏗️ Technical Architecture
 
 - **Backend**: Node.js + Express + TypeScript
-- **Database**: PostgreSQL + Prisma ORM (10 Core Tables)
+- **Database**: MongoDB / MongoDB Atlas + Mongoose ODM (NoSQL)
 - **Frontend**: React 18 + Vite + Vanilla CSS System (Design Tokens)
 - **State Management**: Zustand (Auth & UI) + TanStack Query (Server State)
 - **Authentication**: JWT (Access Token in-memory + Refresh Token httpOnly Cookie)
@@ -27,24 +27,22 @@ A high-quality, production-ready Project Tracker and Team Management System cust
 
 ### Prerequisites
 - Node.js (v18+)
-- PostgreSQL (v14+) running locally or via Docker
+- MongoDB or MongoDB Atlas cluster
 
 ### Backend Setup
 ```bash
 cd backend
 npm install
-cp .env.example .env
-# Configure DATABASE_URL in .env
-npx prisma migrate dev --name init
-npx prisma db seed
-npm run dev
+# Set DATABASE_URL in .env (e.g., mongodb+srv://<user>:<password>@cluster0.../project_tracker?retryWrites=true&w=majority)
+npm run seed     # Seeds initial admin, student users, and project data
+npm run dev      # Starts development server on http://localhost:3001
 ```
 
 ### Frontend Setup
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev      # Starts frontend dev server on http://localhost:5173
 ```
 
 ---
@@ -54,12 +52,12 @@ npm run dev
 ```
 ├── backend/
 │   ├── src/
-│   │   ├── config/          # Environment & DB configuration
+│   │   ├── config/          # Environment & MongoDB configuration
+│   │   ├── models/          # Mongoose NoSQL Schemas & Models
 │   │   ├── middlewares/     # Auth, RBAC, Validation, Error middlewares
 │   │   ├── modules/         # Auth, Users, Projects, Milestones, Tasks, etc.
-│   │   └── utils/           # API response helpers, Logger, Magic-byte checks
-│   ├── prisma/              # Prisma schema & seed script
-│   └── uploads/             # Server file uploads (outside webroot)
+│   │   └── utils/           # API response helpers, Logger, Seed helper
+│   └── uploads/             # Server file uploads
 ├── frontend/
 │   ├── src/
 │   │   ├── components/      # Shared UI design system components

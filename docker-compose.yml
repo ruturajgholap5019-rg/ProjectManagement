@@ -34,8 +34,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      - ./backend/prisma:/app/prisma
 
   # React Frontend Single Page Application (Nginx)
   frontend:

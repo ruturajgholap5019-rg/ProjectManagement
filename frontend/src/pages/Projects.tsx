@@ -6,7 +6,9 @@ import { useDateFilterStore } from '../store/dateFilterStore';
 import { Button } from '../components/UI/Button';
 import { Input, Select, TextArea } from '../components/UI/Input';
 import { Badge } from '../components/UI/Badge';
-import { FolderPlus, Search, Users, CheckCircle2, User as UserIcon, Sparkles, Layers, X, ArrowLeft, Settings } from 'lucide-react';
+import { ConfirmModal } from '../components/UI/ConfirmModal';
+import { useToast } from '../context/ToastContext';
+import { FolderPlus, Search, Users, CheckCircle2, User as UserIcon, Sparkles, Layers, X, ArrowLeft, Settings, Trash2 } from 'lucide-react';
 
 interface ProjectItem {
   id: string;
@@ -40,6 +42,7 @@ interface ProjectsPageProps {
 }
 
 export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onToggleFullScreenForm, onOpenCategoryManager }) => {
+  const { showToast } = useToast();
   const user = useAuthStore((state) => state.user);
   const { selectedCategory, categories } = useCategoryFilterStore();
 
@@ -152,11 +155,36 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
       setReferencePerson('');
       setFormStartDate('');
       setTargetEndDate('');
+      showToast('Project created successfully! 🎉', 'success');
       fetchProjects();
     } catch (err: any) {
-      alert(err.message || 'Failed to create project');
+      showToast(err.message || 'Failed to create project', 'error');
     } finally {
       setIsCreatingProject(false);
+    }
+  };
+
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmDeleteProject = async () => {
+    if (!deletingProjectId) return;
+    const targetId = deletingProjectId;
+    setIsDeleting(true);
+    // Instant real-time UI removal
+    setProjects((prev) => prev.filter((p) => p.id !== targetId));
+    setDeletingProjectId(null);
+    showToast('Project deleted successfully', 'success');
+    try {
+      await apiFetch(`/projects/${targetId}`, {
+        method: 'DELETE',
+      });
+      fetchProjects();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete project', 'error');
+      fetchProjects(); // Revert on failure
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -574,8 +602,42 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
 
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                    <Badge variant="neutral">{p.projectType.replace(/_/g, ' ')}</Badge>
-                    {getStatusBadge(p.status)}
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Badge variant="neutral">{p.projectType.replace(/_/g, ' ')}</Badge>
+                      {getStatusBadge(p.status)}
+                    </div>
+                    {user?.role === 'ADMIN' && (
+                      <button
+                        type="button"
+                        title="Delete Project"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingProjectId(p.id);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: '6px',
+                          borderRadius: '6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#ef4444';
+                          e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.12)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = 'var(--text-muted)';
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
 
                   <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.02em' }}>
@@ -629,6 +691,17 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({ onSelectProject, onT
         </div>
       )}
 
+      {/* Delete Project Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingProjectId)}
+        onClose={() => setDeletingProjectId(null)}
+        onConfirm={handleConfirmDeleteProject}
+        title="Delete Project"
+        message="Are you sure you want to permanently delete this project? All associated tasks, milestones, comments, and attachments will be deleted immediately."
+        confirmText="Delete Project"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

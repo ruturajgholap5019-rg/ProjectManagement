@@ -30,6 +30,8 @@ interface AuthState {
   fetchProfile: () => Promise<void>;
 }
 
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   accessToken: null,
@@ -44,7 +46,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     localStorage.removeItem('has_logged_in');
     try {
-      await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch(`${BASE_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch {
       // Ignore logout fetch errors
     } finally {
@@ -59,7 +61,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     try {
-      const res = await fetch('/api/v1/auth/refresh', {
+      const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -67,7 +69,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (!res.ok) {
         localStorage.removeItem('has_logged_in');
-        set({ isLoading: false });
+        set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
         return false;
       }
 
@@ -77,10 +79,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await get().fetchProfile();
         return true;
       }
-      set({ isLoading: false });
+      set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
       return false;
     } catch {
-      set({ isLoading: false });
+      set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
       return false;
     }
   },
@@ -90,7 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!token) return;
 
     try {
-      const res = await fetch('/api/v1/auth/me', {
+      const res = await fetch(`${BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
         credentials: 'include',
       });
@@ -100,6 +102,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (data.success) {
           set({ user: data.data, isAuthenticated: true, isLoading: false });
         }
+      } else {
+        set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
       }
     } catch {
       set({ isLoading: false });

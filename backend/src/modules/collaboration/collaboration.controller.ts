@@ -4,6 +4,7 @@ import { AttachmentService } from './attachment.service.js';
 import { sendSuccess } from '../../utils/apiResponse.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { validateFileMagicBytes } from '../../utils/fileValidation.js';
+import { Attachment } from '../../models/index.js';
 import fs from 'fs';
 
 export class CollaborationController {
@@ -61,10 +62,8 @@ export class CollaborationController {
 
       const { projectId, taskId } = req.body;
 
-      // Validate magic bytes to verify actual file signature matches MIME claim
       const isValidMagic = await validateFileMagicBytes(file.path, file.mimetype);
       if (!isValidMagic) {
-        // Delete invalid file immediately
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
         throw new AppError('File signature does not match claimed MIME type. Upload rejected.', 400);
       }
@@ -82,7 +81,6 @@ export class CollaborationController {
 
       sendSuccess(res, attachment, 'File uploaded and attached successfully', 201);
     } catch (error) {
-      // Cleanup uploaded file on error
       const file = (req as any).file;
       if (file && fs.existsSync(file.path)) {
         fs.unlinkSync(file.path);
@@ -96,11 +94,7 @@ export class CollaborationController {
       if (!req.user) throw new AppError('Unauthorized', 401);
 
       const { attachmentId } = req.params;
-      const { prisma } = await import('../../config/database.js');
-
-      const attachment = await prisma.attachment.findUnique({
-        where: { id: attachmentId },
-      });
+      const attachment = await Attachment.findById(attachmentId);
 
       if (!attachment) {
         throw new AppError('Attachment not found', 404);

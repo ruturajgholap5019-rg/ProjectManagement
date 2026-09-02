@@ -1,9 +1,20 @@
-import { prisma } from '../../config/database.js';
+import {
+  Project,
+  User,
+  ProjectMember,
+  Task,
+  TaskDependency,
+  Milestone,
+  WorkActivity,
+  Comment,
+  Attachment,
+  ActivityLog,
+  Client,
+} from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { ProjectStatus, ProjectType, Priority, UserRole } from '../../types/enums.js';
 import { emailService } from '../../services/email.service.js';
 import { NotificationService } from '../notifications/notification.service.js';
-import { AuditService } from '../../services/audit.service.js';
 import { cacheGet, cacheSet, cacheDelPattern } from '../../config/redis.js';
 
 export interface CreateProjectInput {
@@ -26,7 +37,7 @@ export interface CreateProjectInput {
 export class ProjectService {
   static async createProject(input: CreateProjectInput) {
     if (input.leadId) {
-      const lead = await prisma.user.findUnique({ where: { id: input.leadId } });
+      const lead = await User.findById(input.leadId);
       if (!lead) throw new AppError('Specified assigned member does not exist', 404);
     }
 
@@ -35,54 +46,44 @@ export class ProjectService {
       memberSet.add(input.leadId);
     }
 
-    const project = await prisma.project.create({
-      data: {
-        name: input.name.trim(),
-        description: input.description?.trim(),
-        scope: input.scope?.trim(),
-        projectType: input.projectType,
-        leadId: input.leadId || null,
-        clientId: input.clientId || null,
-        referencePerson: input.referencePerson?.trim() || null,
-        priority: input.priority || Priority.MEDIUM,
-        startDate: input.startDate ? new Date(input.startDate) : null,
-        targetEndDate: input.targetEndDate ? new Date(input.targetEndDate) : null,
-        maintenanceRequired: Boolean(input.maintenanceRequired),
-        maintenanceNotes: input.maintenanceNotes?.trim(),
-        createdBy: input.createdBy,
-        members: {
-          create: Array.from(memberSet).map((userId) => ({
-            userId,
-          })),
-        },
-      },
-      include: {
-        lead: {
-          select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true },
-        },
-        members: {
-          include: {
-            user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
-          },
-        },
-      },
+    const project = await Project.create({
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+      scope: input.scope?.trim() || null,
+      projectType: input.projectType,
+      leadId: input.leadId || null,
+      clientId: input.clientId || null,
+      referencePerson: input.referencePerson?.trim() || null,
+      priority: input.priority || Priority.MEDIUM,
+      startDate: input.startDate ? new Date(input.startDate) : null,
+      targetEndDate: input.targetEndDate ? new Date(input.targetEndDate) : null,
+      maintenanceRequired: Boolean(input.maintenanceRequired),
+      maintenanceNotes: input.maintenanceNotes?.trim() || null,
+      createdBy: input.createdBy,
     });
 
-    // Notify assigned members via Email & In-App Notification (batch fetch to avoid N+1)
+    for (const userId of memberSet) {
+      try {
+        await ProjectMember.create({
+          projectId: project._id,
+          userId,
+        });
+      } catch {
+        // Ignore duplicate project member errors
+      }
+    }
+
+    // Notify assigned members via Email & In-App Notification
     const assignedUserIds = Array.from(memberSet);
-    const assignedUsers = await prisma.user.findMany({
-      where: { id: { in: assignedUserIds } },
-      select: { id: true, email: true, firstName: true, lastName: true },
-    });
+    const assignedUsers = await User.find({ _id: { $in: assignedUserIds } }).lean();
 
-    // Fire notifications concurrently for better performance
     await Promise.allSettled(
-      assignedUsers.map(async (userObj) => {
-        await NotificationService.createNotification(userObj.id, {
+      assignedUsers.map(async (userObj: any) => {
+        await NotificationService.createNotification(userObj._id, {
           type: 'PROJECT_ASSIGNED',
           title: 'Assigned to Project',
           message: `You have been assigned to project "${project.name}".`,
-          link: `/projects/${project.id}`,
+          link: `/projects/${project._id}`,
         });
 
         await emailService.sendProjectAssignmentEmail(
@@ -90,7 +91,7 @@ export class ProjectService {
           `${userObj.firstName} ${userObj.lastName}`,
           project.name,
           project.scope || undefined,
-          project.targetEndDate
+          project.targetEndDate || undefined
         );
       })
     );
@@ -98,63 +99,55 @@ export class ProjectService {
     await cacheDelPattern('projects:*');
     await cacheDelPattern('dashboard:*');
 
-    return project;
+    return this.getProjectById(project._id);
   }
 
   private static lastDeadlineCheck = 0;
 
   static async checkExpiredProjectDeadlines() {
     const now = Date.now();
-    // Throttle checks to once every 15 minutes to avoid database overhead on page views
     if (now - ProjectService.lastDeadlineCheck < 15 * 60 * 1000) {
       return;
     }
     ProjectService.lastDeadlineCheck = now;
 
-    // Run in background asynchronously so API requests return instantly
     (async () => {
       try {
         const nowDate = new Date();
-        const expiredProjects = await prisma.project.findMany({
-          where: {
-            targetEndDate: { lt: nowDate },
-            status: { notIn: [ProjectStatus.COMPLETED, ProjectStatus.CANCELLED, ProjectStatus.AT_RISK] },
-          },
-          include: {
-            lead: { select: { id: true, email: true, firstName: true, lastName: true } },
-          },
-        });
+        const expiredProjects = await Project.find({
+          targetEndDate: { $lt: nowDate },
+          status: { $nin: [ProjectStatus.COMPLETED, ProjectStatus.CANCELLED, ProjectStatus.AT_RISK] },
+        }).lean();
 
         for (const project of expiredProjects) {
-          const deadlineDate = project.targetEndDate
-            ? new Date(project.targetEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          const deadlineDate = (project as any).targetEndDate
+            ? new Date((project as any).targetEndDate).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
             : 'target date';
           const reason = `Project deadline expired on ${deadlineDate}. Automatically moved to AT_RISK category.`;
 
-          await prisma.project.update({
-            where: { id: project.id },
-            data: {
-              status: ProjectStatus.AT_RISK,
-              statusReason: reason,
-            },
+          await Project.findByIdAndUpdate((project as any)._id, {
+            status: ProjectStatus.AT_RISK,
+            statusReason: reason,
           });
 
-          const admins = await prisma.user.findMany({
-            where: { role: UserRole.ADMIN, isActive: true },
-            select: { id: true, email: true, firstName: true, lastName: true },
-          });
+          const admins = await User.find({ role: UserRole.ADMIN, isActive: true }).lean();
+          const leadUser = (project as any).leadId ? await User.findById((project as any).leadId).lean() : null;
 
           const notifyUsersMap = new Map<string, { id: string; email: string; name: string }>();
-          if (project.lead) {
-            notifyUsersMap.set(project.lead.id, {
-              id: project.lead.id,
-              email: project.lead.email,
-              name: `${project.lead.firstName} ${project.lead.lastName}`,
+          if (leadUser) {
+            notifyUsersMap.set((leadUser as any)._id, {
+              id: (leadUser as any)._id,
+              email: (leadUser as any).email,
+              name: `${(leadUser as any).firstName} ${(leadUser as any).lastName}`,
             });
           }
-          admins.forEach((a) => {
-            notifyUsersMap.set(a.id, {
-              id: a.id,
+          admins.forEach((a: any) => {
+            notifyUsersMap.set(a._id, {
+              id: a._id,
               email: a.email,
               name: `${a.firstName} ${a.lastName}`,
             });
@@ -163,18 +156,18 @@ export class ProjectService {
           for (const [, userObj] of notifyUsersMap.entries()) {
             await NotificationService.createNotification(userObj.id, {
               type: 'PROJECT_AT_RISK',
-              title: `🚨 Project Deadline Expired: ${project.name}`,
-              message: `Project "${project.name}" target deadline has expired (${deadlineDate}). Status set to AT_RISK.`,
-              link: `/projects/${project.id}`,
+              title: `🚨 Project Deadline Expired: ${(project as any).name}`,
+              message: `Project "${(project as any).name}" target deadline has expired (${deadlineDate}). Status set to AT_RISK.`,
+              link: `/projects/${(project as any)._id}`,
             });
 
             if (userObj.email) {
               await emailService.sendProjectAssignmentEmail(
                 userObj.email,
                 userObj.name,
-                `🚨 DEADLINE EXPIRED: ${project.name} (AT RISK)`,
-                `Project "${project.name}" target deadline has expired. System automatically updated status to AT_RISK. Please review project progress.`,
-                project.targetEndDate
+                `🚨 DEADLINE EXPIRED: ${(project as any).name} (AT RISK)`,
+                `Project "${(project as any).name}" target deadline has expired. System automatically updated status to AT_RISK. Please review project progress.`,
+                (project as any).targetEndDate || undefined
               );
             }
           }
@@ -187,75 +180,64 @@ export class ProjectService {
 
   static async listProjects(user: { id: string; role: UserRole }, filters: { status?: ProjectStatus; search?: string }) {
     await ProjectService.checkExpiredProjectDeadlines();
-    const where: any = {};
+    const query: any = {};
 
-    // Filter by role visibility: Non-Admin users ONLY see projects explicitly assigned to them
     if (user.role !== UserRole.ADMIN) {
-      where.OR = [
-        { leadId: user.id },
-        { members: { some: { userId: user.id } } },
-      ];
+      const userMemberships = await ProjectMember.find({ userId: user.id }, 'projectId').lean();
+      const memberProjectIds = userMemberships.map((m: any) => m.projectId);
+      query.$or = [{ leadId: user.id }, { _id: { $in: memberProjectIds } }];
     }
 
     if (filters.status) {
       if (filters.status === 'ONGOING' || filters.status === 'ACTIVE') {
-        where.status = { in: ['ONGOING', 'ACTIVE'] };
+        query.status = { $in: ['ONGOING', 'ACTIVE'] };
       } else {
-        where.status = filters.status;
+        query.status = filters.status;
       }
     }
 
     if (filters.search) {
-      where.name = { contains: filters.search };
+      query.name = new RegExp(filters.search, 'i');
     }
 
     const cacheKey = `projects:${user.role}:${user.id}:${filters.status || 'all'}:${filters.search || 'none'}`;
     const cached = await cacheGet<any[]>(cacheKey);
     if (cached) return cached;
 
-    const projects = await prisma.project.findMany({
-      where,
-      include: {
-        lead: {
-          select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true },
-        },
-        previousLead: {
-          select: { id: true, firstName: true, lastName: true, email: true },
-        },
-        creator: {
-          select: { id: true, firstName: true, lastName: true, email: true },
-        },
-        client: {
-          select: { id: true, name: true, phone: true, email: true, address: true, referencePerson: true },
-        },
-        _count: {
-          select: {
-            tasks: true,
-            members: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+    const projectDocs = await Project.find(query).sort({ createdAt: -1 }).lean();
+    const projectIds = projectDocs.map((p: any) => p._id);
+
+    const [allLeads, allPrevLeads, allCreators, allClients, allMemberships, allTasks] = await Promise.all([
+      User.find({ _id: { $in: projectDocs.map((p: any) => p.leadId).filter(Boolean) } }, 'firstName lastName email avatarUrl _id').lean(),
+      User.find({ _id: { $in: projectDocs.map((p: any) => p.previousLeadId).filter(Boolean) } }, 'firstName lastName email _id').lean(),
+      User.find({ _id: { $in: projectDocs.map((p: any) => p.createdBy).filter(Boolean) } }, 'firstName lastName email _id').lean(),
+      Client.find({ _id: { $in: projectDocs.map((p: any) => p.clientId).filter(Boolean) } }).lean(),
+      ProjectMember.find({ projectId: { $in: projectIds } }).lean(),
+      Task.find({ projectId: { $in: projectIds } }, 'projectId status _id').lean(),
+    ]);
+
+    const leadMap = new Map(allLeads.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email, avatarUrl: u.avatarUrl }]));
+    const prevLeadMap = new Map(allPrevLeads.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email }]));
+    const creatorMap = new Map(allCreators.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email }]));
+    const clientMap = new Map(allClients.map((c: any) => [c._id, { id: c._id, name: c.name, phone: c.phone, email: c.email, address: c.address, referencePerson: c.referencePerson }]));
+
+    const result = projectDocs.map((p: any) => {
+      const projTasks = allTasks.filter((t: any) => t.projectId === p._id);
+      const completedTasks = projTasks.filter((t: any) => t.status === 'COMPLETED').length;
+      const memberCount = allMemberships.filter((m: any) => m.projectId === p._id).length;
+
+      return {
+        ...p,
+        id: p._id,
+        lead: p.leadId ? leadMap.get(p.leadId) || null : null,
+        previousLead: p.previousLeadId ? prevLeadMap.get(p.previousLeadId) || null : null,
+        creator: creatorMap.get(p.createdBy) || null,
+        client: p.clientId ? clientMap.get(p.clientId) || null : null,
+        totalTasks: projTasks.length,
+        completedTasks,
+        memberCount,
+      };
     });
-
-    const projectIds = projects.map((p: any) => p.id);
-    const completedCounts = await prisma.task.groupBy({
-      by: ['projectId'],
-      where: {
-        projectId: { in: projectIds },
-        status: 'COMPLETED',
-      },
-      _count: { id: true },
-    });
-
-    const completedMap = new Map(completedCounts.map((c: any) => [c.projectId, c._count.id]));
-
-    const result = projects.map((p: any) => ({
-      ...p,
-      totalTasks: p._count.tasks,
-      completedTasks: completedMap.get(p.id) || 0,
-      memberCount: p._count.members,
-    }));
 
     await cacheSet(cacheKey, result, 600);
     return result;
@@ -263,96 +245,85 @@ export class ProjectService {
 
   static async getProjectById(projectId: string) {
     await ProjectService.checkExpiredProjectDeadlines();
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        lead: {
-          select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true },
-        },
-        creator: {
-          select: { id: true, firstName: true, lastName: true, email: true, role: true },
-        },
-        previousLead: {
-          select: { id: true, firstName: true, lastName: true, email: true },
-        },
-        client: {
-          select: { id: true, name: true, phone: true, email: true, address: true, referencePerson: true },
-        },
-        members: {
-          include: {
-            user: { select: { id: true, firstName: true, lastName: true, email: true, role: true, memberType: true } },
-          },
-        },
-        milestones: {
-          orderBy: { sortOrder: 'asc' },
-        },
-        _count: {
-          select: { tasks: true },
-        },
-      },
-    });
+    const project = await Project.findById(projectId).lean();
 
     if (!project) {
       throw new AppError('Project not found', 404);
     }
 
-    const completedTasks = await prisma.task.count({
-      where: { projectId, status: 'COMPLETED' },
-    });
+    const [lead, previousLead, creator, client, memberships, milestones, tasks] = await Promise.all([
+      (project as any).leadId ? User.findById((project as any).leadId, 'firstName lastName email avatarUrl _id').lean() : null,
+      (project as any).previousLeadId ? User.findById((project as any).previousLeadId, 'firstName lastName email _id').lean() : null,
+      User.findById((project as any).createdBy, 'firstName lastName email role _id').lean(),
+      (project as any).clientId ? Client.findById((project as any).clientId).lean() : null,
+      ProjectMember.find({ projectId }).lean(),
+      Milestone.find({ projectId }).sort({ sortOrder: 1 }).lean(),
+      Task.find({ projectId }).lean(),
+    ]);
+
+    const memberUserIds = memberships.map((m: any) => m.userId);
+    const memberUsers = await User.find(
+      { _id: { $in: memberUserIds } },
+      'firstName lastName email role memberType _id'
+    ).lean();
+    const memberUserMap = new Map(memberUsers.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email, role: u.role, memberType: u.memberType }]));
+
+    const completedTasks = tasks.filter((t: any) => t.status === 'COMPLETED').length;
 
     return {
-      ...project,
-      totalTasks: project._count.tasks,
+      ...(project as any),
+      id: (project as any)._id,
+      lead: lead ? { id: (lead as any)._id, firstName: (lead as any).firstName, lastName: (lead as any).lastName, email: (lead as any).email, avatarUrl: (lead as any).avatarUrl } : null,
+      previousLead: previousLead ? { id: (previousLead as any)._id, firstName: (previousLead as any).firstName, lastName: (previousLead as any).lastName, email: (previousLead as any).email } : null,
+      creator: creator ? { id: (creator as any)._id, firstName: (creator as any).firstName, lastName: (creator as any).lastName, email: (creator as any).email, role: (creator as any).role } : null,
+      client: client ? { id: (client as any)._id, name: (client as any).name, phone: (client as any).phone, email: (client as any).email, address: (client as any).address, referencePerson: (client as any).referencePerson } : null,
+      members: memberships.map((m: any) => ({
+        id: m._id,
+        projectId: m.projectId,
+        userId: m.userId,
+        joinedAt: m.joinedAt,
+        user: memberUserMap.get(m.userId) || null,
+      })),
+      milestones: milestones.map((ms: any) => ({ ...ms, id: ms._id })),
+      totalTasks: tasks.length,
       completedTasks,
     };
   }
 
   static async updateProjectStatus(projectId: string, status: ProjectStatus, statusReason?: string) {
-    const existing = await prisma.project.findUnique({ where: { id: projectId } });
+    const existing = await Project.findById(projectId);
     if (!existing) throw new AppError('Project not found', 404);
 
-    const updateData: any = {
-      status,
-      statusReason: statusReason?.trim() || null,
-    };
-
+    existing.status = status;
+    existing.statusReason = statusReason?.trim() || null;
     if (status === ProjectStatus.COMPLETED) {
-      updateData.actualEndDate = new Date();
+      existing.actualEndDate = new Date();
     }
 
-    const updated = await prisma.project.update({
-      where: { id: projectId },
-      data: updateData,
-    });
-
-    return updated;
+    await existing.save();
+    return this.getProjectById(projectId);
   }
 
   static async updateProject(projectId: string, data: any) {
-    const existing = await prisma.project.findUnique({ where: { id: projectId } });
+    const existing = await Project.findById(projectId);
     if (!existing) throw new AppError('Project not found', 404);
 
     let previousLeadId = existing.previousLeadId;
     let handedOverAt = existing.handedOverAt;
 
-    // Track handover if lead/responsible member changes
     if (data.leadId && data.leadId !== existing.leadId) {
       previousLeadId = existing.leadId;
       handedOverAt = new Date();
 
-      const isMember = await prisma.projectMember.findUnique({
-        where: { projectId_userId: { projectId, userId: data.leadId } },
-      });
-      if (!isMember) {
-        await prisma.projectMember.create({
-          data: { projectId, userId: data.leadId },
-        });
-      }
+      await ProjectMember.findOneAndUpdate(
+        { projectId, userId: data.leadId },
+        { projectId, userId: data.leadId },
+        { upsert: true }
+      );
 
-      // Notify new assigned lead
-      const newLeadUser = await prisma.user.findUnique({ where: { id: data.leadId } });
+      const newLeadUser = await User.findById(data.leadId);
       if (newLeadUser) {
-        await NotificationService.createNotification(newLeadUser.id, {
+        await NotificationService.createNotification(newLeadUser._id, {
           type: 'PROJECT_HANDOVER',
           title: 'Project Responsibility Handover',
           message: `You are now responsible for project "${existing.name}".`,
@@ -364,87 +335,59 @@ export class ProjectService {
           `${newLeadUser.firstName} ${newLeadUser.lastName}`,
           existing.name,
           existing.scope || undefined,
-          existing.targetEndDate
+          existing.targetEndDate || undefined
         );
       }
     }
 
-    const updated = await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        name: data.name?.trim(),
-        description: data.description?.trim(),
-        scope: data.scope?.trim(),
-        projectType: data.projectType,
-        leadId: data.leadId,
-        clientId: data.clientId !== undefined ? data.clientId || null : undefined,
-        referencePerson: data.referencePerson !== undefined ? data.referencePerson?.trim() || null : undefined,
-        previousLeadId,
-        handedOverAt,
-        priority: data.priority,
-        status: data.status,
-        statusReason: data.statusReason?.trim(),
-        startDate: data.startDate ? new Date(data.startDate) : undefined,
-        targetEndDate: data.targetEndDate ? new Date(data.targetEndDate) : undefined,
-        maintenanceRequired: data.maintenanceRequired !== undefined ? Boolean(data.maintenanceRequired) : undefined,
-        maintenanceNotes: data.maintenanceNotes?.trim(),
-      },
-      include: {
-        lead: { select: { id: true, firstName: true, lastName: true, email: true } },
-        previousLead: { select: { id: true, firstName: true, lastName: true, email: true } },
-        client: { select: { id: true, name: true, phone: true, email: true, address: true, referencePerson: true } },
-      },
-    });
+    if (data.name !== undefined) existing.name = data.name.trim();
+    if (data.description !== undefined) existing.description = data.description?.trim() || null;
+    if (data.scope !== undefined) existing.scope = data.scope?.trim() || null;
+    if (data.projectType !== undefined) existing.projectType = data.projectType;
+    if (data.leadId !== undefined) existing.leadId = data.leadId;
+    if (data.clientId !== undefined) existing.clientId = data.clientId || null;
+    if (data.referencePerson !== undefined) existing.referencePerson = data.referencePerson?.trim() || null;
+    if (data.priority !== undefined) existing.priority = data.priority;
+    if (data.status !== undefined) existing.status = data.status;
+    if (data.statusReason !== undefined) existing.statusReason = data.statusReason?.trim() || null;
+    if (data.startDate !== undefined) existing.startDate = data.startDate ? new Date(data.startDate) : null;
+    if (data.targetEndDate !== undefined) existing.targetEndDate = data.targetEndDate ? new Date(data.targetEndDate) : null;
+    if (data.maintenanceRequired !== undefined) existing.maintenanceRequired = Boolean(data.maintenanceRequired);
+    if (data.maintenanceNotes !== undefined) existing.maintenanceNotes = data.maintenanceNotes?.trim() || null;
 
-    return updated;
+    existing.previousLeadId = previousLeadId;
+    existing.handedOverAt = handedOverAt;
+
+    await existing.save();
+    return this.getProjectById(projectId);
   }
 
   static async deleteProject(projectId: string) {
-    const existing = await prisma.project.findUnique({ where: { id: projectId } });
+    const existing = await Project.findById(projectId);
     if (!existing) throw new AppError('Project not found', 404);
 
-    await prisma.$transaction(async (tx) => {
-      // 1. Delete task dependencies
-      const projectTasks = await tx.task.findMany({
-        where: { projectId },
-        select: { id: true },
+    const projectTasks = await Task.find({ projectId }, '_id').lean();
+    const taskIds = projectTasks.map((t: any) => t._id);
+
+    if (taskIds.length > 0) {
+      await TaskDependency.deleteMany({
+        $or: [{ taskId: { $in: taskIds } }, { dependsOnId: { $in: taskIds } }],
       });
-      const taskIds = projectTasks.map((t) => t.id);
+    }
 
-      if (taskIds.length > 0) {
-        await tx.taskDependency.deleteMany({
-          where: {
-            OR: [{ taskId: { in: taskIds } }, { dependsOnId: { in: taskIds } }],
-          },
-        });
-      }
-
-      // 2. Delete comments & attachments linked to tasks or project
-      await tx.comment.deleteMany({
-        where: { OR: [{ projectId }, { taskId: { in: taskIds } }] },
-      });
-      await tx.attachment.deleteMany({
-        where: { OR: [{ projectId }, { taskId: { in: taskIds } }] },
-      });
-
-      // 3. Delete work activities linked to project
-      await tx.workActivity.deleteMany({ where: { projectId } });
-
-      // 4. Delete tasks & subtasks
-      await tx.task.deleteMany({ where: { projectId } });
-
-      // 5. Delete milestones
-      await tx.milestone.deleteMany({ where: { projectId } });
-
-      // 6. Delete project members
-      await tx.projectMember.deleteMany({ where: { projectId } });
-
-      // 7. Delete activity logs referencing project
-      await tx.activityLog.deleteMany({ where: { projectId } });
-
-      // 8. Hard delete project
-      await tx.project.delete({ where: { id: projectId } });
+    await Comment.deleteMany({
+      $or: [{ projectId }, { taskId: { $in: taskIds } }],
     });
+    await Attachment.deleteMany({
+      $or: [{ projectId }, { taskId: { $in: taskIds } }],
+    });
+
+    await WorkActivity.deleteMany({ projectId });
+    await Task.deleteMany({ projectId });
+    await Milestone.deleteMany({ projectId });
+    await ProjectMember.deleteMany({ projectId });
+    await ActivityLog.deleteMany({ projectId });
+    await Project.findByIdAndDelete(projectId);
 
     return { message: 'Project and all associated data permanently removed.' };
   }

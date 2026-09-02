@@ -1,8 +1,6 @@
-import { prisma } from '../../config/database.js';
+import { ProjectCategory, Project } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { cacheGet, cacheSet, cacheDelPattern } from '../../config/redis.js';
-
-// Category Management Service
 
 const DEFAULT_CATEGORIES = [
   { code: 'PROJECT_DEVELOPMENT', name: 'Project Development', icon: '💻', sortOrder: 1 },
@@ -17,94 +15,77 @@ export class CategoryService {
     const cached = await cacheGet<any[]>('categories:all');
     if (cached) return cached;
 
-    let categories = await prisma.projectCategory.findMany({
-      orderBy: { sortOrder: 'asc' },
-    });
+    let categories = await ProjectCategory.find().sort({ sortOrder: 1 }).lean();
 
     if (categories.length === 0) {
-      await prisma.projectCategory.createMany({
-        data: DEFAULT_CATEGORIES,
-      });
-      categories = await prisma.projectCategory.findMany({
-        orderBy: { sortOrder: 'asc' },
-      });
+      await ProjectCategory.insertMany(DEFAULT_CATEGORIES);
+      categories = await ProjectCategory.find().sort({ sortOrder: 1 }).lean();
     }
 
-    await cacheSet('categories:all', categories, 600);
-    return categories;
+    const result = categories.map((c: any) => ({ ...c, id: c._id }));
+    await cacheSet('categories:all', result, 600);
+    return result;
   }
 
   static async createCategory(data: { code: string; name: string; icon?: string; description?: string }) {
-    const existing = await prisma.projectCategory.findFirst({
-      where: {
-        OR: [
-          { code: data.code.trim().toUpperCase() },
-          { name: data.name.trim() },
-        ],
-      },
+    const code = data.code.trim().toUpperCase().replace(/\s+/g, '_');
+    const existing = await ProjectCategory.findOne({
+      $or: [{ code }, { name: data.name.trim() }],
     });
 
     if (existing) {
       throw new AppError('Category with this code or name already exists', 400);
     }
 
-    const count = await prisma.projectCategory.count();
+    const count = await ProjectCategory.countDocuments();
 
-    const created = await prisma.projectCategory.create({
-      data: {
-        code: data.code.trim().toUpperCase().replace(/\s+/g, '_'),
-        name: data.name.trim(),
-        icon: data.icon?.trim() || '📁',
-        description: data.description?.trim(),
-        sortOrder: count + 1,
-      },
+    const created = await ProjectCategory.create({
+      code,
+      name: data.name.trim(),
+      icon: data.icon?.trim() || '📁',
+      description: data.description?.trim() || null,
+      sortOrder: count + 1,
     });
 
     await cacheDelPattern('categories*');
-    return created;
+    return { ...created.toJSON(), id: created._id };
   }
 
-  static async updateCategory(id: string, data: { code?: string; name?: string; icon?: string; description?: string; sortOrder?: number }) {
-    const category = await prisma.projectCategory.findUnique({ where: { id } });
+  static async updateCategory(
+    id: string,
+    data: { code?: string; name?: string; icon?: string; description?: string; sortOrder?: number }
+  ) {
+    const category = await ProjectCategory.findById(id);
     if (!category) throw new AppError('Category not found', 404);
 
     let newCode = category.code;
     if (data.code && data.code.trim() !== category.code) {
       newCode = data.code.trim().toUpperCase().replace(/\s+/g, '_');
-      const existing = await prisma.projectCategory.findFirst({
-        where: { code: newCode, NOT: { id } },
-      });
+      const existing = await ProjectCategory.findOne({ code: newCode, _id: { $ne: id } });
       if (existing) {
         throw new AppError(`Category code "${newCode}" is already in use by another category`, 400);
       }
 
-      // Cascade update to projects using this category code
-      await prisma.project.updateMany({
-        where: { projectType: category.code },
-        data: { projectType: newCode },
-      });
+      await Project.updateMany({ projectType: category.code }, { projectType: newCode });
     }
 
-    return prisma.projectCategory.update({
-      where: { id },
-      data: {
-        code: newCode,
-        ...(data.name && { name: data.name.trim() }),
-        ...(data.icon && { icon: data.icon.trim() }),
-        ...(data.description !== undefined && { description: data.description?.trim() }),
-        ...(data.sortOrder !== undefined && { sortOrder: Number(data.sortOrder) }),
-      },
-    });
+    category.code = newCode;
+    if (data.name !== undefined) category.name = data.name.trim();
+    if (data.icon !== undefined) category.icon = data.icon.trim();
+    if (data.description !== undefined) category.description = data.description?.trim() || null;
+    if (data.sortOrder !== undefined) category.sortOrder = Number(data.sortOrder);
+
+    await category.save();
+    await cacheDelPattern('categories*');
+
+    return { ...category.toJSON(), id: category._id };
   }
 
   static async deleteCategory(id: string) {
-    const category = await prisma.projectCategory.findUnique({ where: { id } });
+    const category = await ProjectCategory.findById(id);
     if (!category) throw new AppError('Category not found', 404);
 
-    // Check if any projects are currently using this category
-    const projectCount = await prisma.project.count({
-      where: { projectType: category.code },
-    });
+    const projectCount = await Project.countDocuments({ projectType: category.code });
 
     if (projectCount > 0) {
       throw new AppError(
@@ -113,7 +94,8 @@ export class CategoryService {
       );
     }
 
-    await prisma.projectCategory.delete({ where: { id } });
+    await ProjectCategory.findByIdAndDelete(id);
+    await cacheDelPattern('categories*');
     return { success: true, message: `Category "${category.name}" deleted successfully.` };
   }
 }

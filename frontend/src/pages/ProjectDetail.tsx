@@ -8,7 +8,7 @@ import { Modal } from '../components/UI/Modal';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { Badge } from '../components/UI/Badge';
 import { generateProjectPdfReport } from '../utils/pdfReportGenerator';
-import { CheckCircle2, UserPlus, UserX, AlertTriangle, Plus, MessageSquare, Paperclip, Download, Sparkles, FileText, Trash2 } from 'lucide-react';
+import { CheckCircle2, UserPlus, UserX, AlertTriangle, Plus, MessageSquare, Paperclip, Download, Sparkles, FileText, Trash2, ArrowLeft } from 'lucide-react';
 
 interface ProjectDetailProps {
   projectId: string;
@@ -213,9 +213,11 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeletingProject, setIsDeletingProject] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchProjectDetails = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const [projData, membersData, msData, taskData, commentData, attachData, actData] = await Promise.all([
         apiFetch<any>(`/projects/${projectId}`),
@@ -236,7 +238,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       setAttachments(attachData);
       setProjectActivities(actData.activities || []);
     } catch (err: any) {
-      alert(err.message || 'Failed to load project details');
+      setLoadError(err.message || 'Project not found or may have been deleted.');
+      if (window.location.pathname.startsWith('/projects/')) {
+        window.history.replaceState({}, '', '/projects');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -312,14 +317,18 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
 
   const handleConfirmRemoveMember = async () => {
     if (!removeMemberUserId) return;
+    const targetUserId = removeMemberUserId;
+    // Real-time optimistic update
+    setMembers((prev) => prev.filter((m) => m.userId !== targetUserId && m.id !== targetUserId && m.user?.id !== targetUserId));
+    setRemoveMemberUserId(null);
     try {
-      await apiFetch(`/projects/${projectId}/members/${removeMemberUserId}`, {
+      await apiFetch(`/projects/${projectId}/members/${targetUserId}`, {
         method: 'DELETE',
       });
-      setRemoveMemberUserId(null);
       fetchProjectDetails();
     } catch (err: any) {
       alert(err.message || 'Failed to remove member');
+      fetchProjectDetails();
     }
   };
 
@@ -558,11 +567,45 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     );
   }
 
-  if (!project) {
+  if (isLoading) {
     return (
-      <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
-        <Sparkles className="animate-pulse-glow" size={24} color="var(--primary)" style={{ marginBottom: '10px' }} />
-        <p style={{ fontWeight: 600 }}>Loading project workbench...</p>
+      <div style={{ padding: '80px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
+        <Sparkles className="animate-pulse-glow" size={28} color="var(--primary)" style={{ marginBottom: '14px' }} />
+        <p style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>Loading project workbench...</p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>Fetching latest deliverables, milestones, and telemetry</p>
+      </div>
+    );
+  }
+
+  if (loadError || !project) {
+    return (
+      <div className="animate-fade-in" style={{ padding: '60px 24px', maxWidth: '640px', margin: '40px auto', textAlign: 'center' }}>
+        <div className="glass-card" style={{ padding: '48px 32px' }}>
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+              color: 'var(--danger)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+            }}
+          >
+            <AlertTriangle size={32} />
+          </div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
+            Project Not Found
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginBottom: '28px', lineHeight: '1.6' }}>
+            {loadError || 'The requested project could not be found. It may have been deleted or moved.'}
+          </p>
+          <Button variant="gradient" onClick={onBack} style={{ padding: '12px 28px', margin: '0 auto' }}>
+            <ArrowLeft size={16} /> Return to Projects Directory
+          </Button>
+        </div>
       </div>
     );
   }

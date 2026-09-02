@@ -348,6 +348,8 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
   };
 
   const executeToggleActive = async (userId: string, isActive: boolean, projectId?: string) => {
+    // Real-time optimistic update
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, isActive } : u)));
     try {
       await apiFetch(`/users/${userId}/status`, {
         method: 'PATCH',
@@ -367,6 +369,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
       fetchUsers();
     } catch (err: any) {
       alert(err.message || 'Failed to change account status.');
+      fetchUsers(); // Rollback on error
     }
   };
 
@@ -379,15 +382,19 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
 
   const handleConfirmDelete = async () => {
     if (!deletingUserId) return;
+    const targetId = deletingUserId;
     setIsDeleting(true);
+    // Instant real-time UI disappearance
+    setUsers((prev) => prev.filter((u) => u.id !== targetId));
+    setDeletingUserId(null);
     try {
-      await apiFetch(`/users/${deletingUserId}`, {
+      await apiFetch(`/users/${targetId}`, {
         method: 'DELETE',
       });
-      setDeletingUserId(null);
       fetchUsers();
     } catch (err: any) {
       alert(err.message || 'Failed to delete account.');
+      fetchUsers(); // Rollback on error
     } finally {
       setIsDeleting(false);
     }
@@ -1511,6 +1518,18 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
           </div>
         </form>
       </Modal>
+
+      {/* Delete User Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingUserId)}
+        onClose={() => setDeletingUserId(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Member Account"
+        message="Are you sure you want to permanently delete this member account? This action will remove their access and project assignments immediately."
+        confirmText="Delete Account"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

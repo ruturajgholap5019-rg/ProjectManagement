@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../../config/database.js';
+import { User } from '../../models/index.js';
 import { env } from '../../config/env.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { AuthPayload } from '../../middlewares/auth.middleware.js';
@@ -26,9 +26,7 @@ export class AuthService {
   }
 
   static async login(email: string, password: string) {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-    });
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
 
     if (!user) {
       throw new AppError('Invalid email or password', 401);
@@ -44,16 +42,19 @@ export class AuthService {
     }
 
     // Update last login timestamp
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    user.lastLoginAt = new Date();
+    await user.save();
 
-    const tokens = this.generateTokens(user);
+    const tokens = this.generateTokens({
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: user.mustChangePassword,
+    });
 
     return {
       user: {
-        id: user.id,
+        id: user._id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
@@ -78,27 +79,27 @@ export class AuthService {
     try {
       const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET) as { id: string };
 
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.id },
-      });
+      const user = await User.findById(decoded.id);
 
       if (!user || !user.isActive) {
         throw new AppError('Invalid refresh token or inactive account', 401);
       }
 
-      const tokens = this.generateTokens(user);
+      const tokens = this.generateTokens({
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        mustChangePassword: user.mustChangePassword,
+      });
       return tokens;
     } catch (error) {
-      // Re-throw application errors so they aren't masked
       if (error instanceof AppError) throw error;
       throw new AppError('Invalid or expired refresh token', 401);
     }
   }
 
   static async changePassword(userId: string, currentPass: string, newPass: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await User.findById(userId);
 
     if (!user) {
       throw new AppError('User not found', 404);
@@ -110,15 +111,11 @@ export class AuthService {
     }
 
     const newHash = await bcrypt.hash(newPass, 12);
+    user.passwordHash = newHash;
+    user.rawPassword = newPass;
+    user.mustChangePassword = false;
+    await user.save();
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        passwordHash: newHash,
-        rawPassword: newPass,
-        mustChangePassword: false,
-      },
-    });
     return { message: 'Password changed successfully' };
   }
 }

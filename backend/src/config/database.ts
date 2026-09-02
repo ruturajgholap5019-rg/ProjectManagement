@@ -1,18 +1,41 @@
-import { PrismaClient } from '@prisma/client';
+import mongoose from 'mongoose';
 import { env } from './env.js';
+import { logger } from '../utils/logger.js';
 
-declare global {
-  // eslint-disable-next-line no-var
-  var prismaGlobal: PrismaClient | undefined;
+let isConnected = false;
+
+export async function connectDB(): Promise<typeof mongoose> {
+  if (isConnected) {
+    return mongoose;
+  }
+
+  try {
+    const conn = await mongoose.connect(env.DATABASE_URL, {
+      autoIndex: true,
+      serverSelectionTimeoutMS: 10000,
+    });
+
+    isConnected = true;
+    logger.info(`📦 MongoDB connected: ${conn.connection.host}`);
+    return conn;
+  } catch (error) {
+    logger.error('❌ MongoDB connection error:', error);
+    throw error;
+  }
 }
 
-// Shared Prisma Client Instance
-export const prisma =
-  globalThis.prismaGlobal ??
-  new PrismaClient({
-    log: env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  });
-
-if (env.NODE_ENV !== 'production') {
-  globalThis.prismaGlobal = prisma;
+export async function disconnectDB(): Promise<void> {
+  if (!isConnected) return;
+  await mongoose.disconnect();
+  isConnected = false;
+  logger.info('📦 MongoDB disconnected successfully.');
 }
+
+mongoose.connection.on('disconnected', () => {
+  isConnected = false;
+  logger.warn('⚠️ MongoDB connection lost. Reconnecting...');
+});
+
+mongoose.connection.on('error', (err) => {
+  logger.error('❌ MongoDB runtime error:', err);
+});

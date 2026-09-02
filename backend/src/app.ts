@@ -50,18 +50,20 @@ app.use(cookieParser());
 // Rate Limiting — Auth Endpoints
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // 50 login attempts per window per IP
+  max: env.NODE_ENV === 'development' ? 1000 : 100, // Generous limit in dev
   message: { success: false, message: 'Too many login attempts. Please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
 });
 
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: env.NODE_ENV === 'development' ? 2000 : 300, // Generous limit for real-time tokens
   message: { success: false, message: 'Too many token refresh requests. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
 });
 
 app.use('/api/v1/auth/login', loginLimiter);

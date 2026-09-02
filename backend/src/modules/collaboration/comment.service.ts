@@ -1,4 +1,4 @@
-import { prisma } from '../../config/database.js';
+import { Comment, User } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 
 export interface CreateCommentInput {
@@ -10,7 +10,6 @@ export interface CreateCommentInput {
 
 export class CommentService {
   static async createComment(input: CreateCommentInput) {
-    // XOR Parent Check: exactly one parent must be provided
     const hasProject = Boolean(input.projectId);
     const hasTask = Boolean(input.taskId);
 
@@ -22,34 +21,37 @@ export class CommentService {
       throw new AppError('Comment content cannot be empty.', 400);
     }
 
-    const comment = await prisma.comment.create({
-      data: {
-        projectId: input.projectId || null,
-        taskId: input.taskId || null,
-        userId: input.userId,
-        content: input.content.trim(),
-      },
-      include: {
-        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true } },
-      },
+    const comment = await Comment.create({
+      projectId: input.projectId || null,
+      taskId: input.taskId || null,
+      userId: input.userId,
+      content: input.content.trim(),
     });
 
-    return comment;
+    const user = await User.findById(input.userId, 'firstName lastName avatarUrl role _id').lean();
+
+    return {
+      ...comment.toJSON(),
+      id: comment._id,
+      user: user ? { id: (user as any)._id, firstName: (user as any).firstName, lastName: (user as any).lastName, avatarUrl: (user as any).avatarUrl, role: (user as any).role } : null,
+    };
   }
 
   static async listComments(query: { projectId?: string; taskId?: string }) {
-    const where: any = {};
-    if (query.projectId) where.projectId = query.projectId;
-    if (query.taskId) where.taskId = query.taskId;
+    const filter: any = {};
+    if (query.projectId) filter.projectId = query.projectId;
+    if (query.taskId) filter.taskId = query.taskId;
 
-    const comments = await prisma.comment.findMany({
-      where,
-      include: {
-        user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const comments = await Comment.find(filter).sort({ createdAt: -1 }).lean();
+    const userIds = [...new Set(comments.map((c: any) => c.userId).filter(Boolean))];
 
-    return comments;
+    const users = await User.find({ _id: { $in: userIds } }, 'firstName lastName avatarUrl role _id').lean();
+    const userMap = new Map(users.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, avatarUrl: u.avatarUrl, role: u.role }]));
+
+    return comments.map((c: any) => ({
+      ...c,
+      id: c._id,
+      user: userMap.get(c.userId) || null,
+    }));
   }
 }

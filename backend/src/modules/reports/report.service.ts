@@ -1,6 +1,6 @@
 // @ts-nocheck
 import ExcelJS from 'exceljs';
-import { prisma } from '../../config/database.js';
+import { Project, Task, WorkActivity, User, ProjectMember, Milestone } from '../../models/index.js';
 
 const COLORS = {
   header: '4472C4',
@@ -195,20 +195,20 @@ async function buildProjects(wb, projects, tasks) {
   });
 
   ws.columns = [
-    { width: 10 }, // A: Sr. No.
-    { width: 42 }, // B: Project Name
-    { width: 28 }, // C: Category
-    { width: 16 }, // D: Status
-    { width: 14 }, // E: Priority
-    { width: 24 }, // F: Project Lead
-    { width: 36 }, // G: Team Members
-    { width: 16 }, // H: Start Date
-    { width: 18 }, // I: Target End Date
-    { width: 14 }, // J: Total Tasks
-    { width: 18 }, // K: Completed Tasks
-    { width: 14 }, // L: % Complete
-    { width: 50 }, // M: Scope / Deliverables
-    { width: 35 }, // N: Notes
+    { width: 10 },
+    { width: 42 },
+    { width: 28 },
+    { width: 16 },
+    { width: 14 },
+    { width: 24 },
+    { width: 36 },
+    { width: 16 },
+    { width: 18 },
+    { width: 14 },
+    { width: 18 },
+    { width: 14 },
+    { width: 50 },
+    { width: 35 },
   ];
   if (projects.length > 0) ws.autoFilter = { from: 'A2', to: 'N' + (2 + projects.length) };
 }
@@ -249,18 +249,18 @@ async function buildTasks(wb, tasks, projects) {
   });
 
   ws.columns = [
-    { width: 10 }, // A: Sr. No.
-    { width: 40 }, // B: Project
-    { width: 26 }, // C: Milestone
-    { width: 42 }, // D: Task Title
-    { width: 48 }, // E: Description
-    { width: 26 }, // F: Assignee
-    { width: 14 }, // G: Priority
-    { width: 16 }, // H: Status
-    { width: 16 }, // I: Start Date
-    { width: 16 }, // J: Due Date
-    { width: 18 }, // K: Completed At
-    { width: 35 }, // L: Notes
+    { width: 10 },
+    { width: 40 },
+    { width: 26 },
+    { width: 42 },
+    { width: 48 },
+    { width: 26 },
+    { width: 14 },
+    { width: 16 },
+    { width: 16 },
+    { width: 16 },
+    { width: 18 },
+    { width: 35 },
   ];
   if (tasks.length > 0) ws.autoFilter = { from: 'A2', to: 'L' + (2 + tasks.length) };
 }
@@ -307,66 +307,104 @@ async function buildActivityLog(wb, activities) {
   ws.getRow(tr).height = 26;
 
   ws.columns = [
-    { width: 16 }, // A: Serial Number
-    { width: 24 }, // B: Date & Time
-    { width: 28 }, // C: Team Member
-    { width: 40 }, // D: Project Name
-    { width: 52 }, // E: Work Description
-    { width: 16 }, // F: Hours Spent
-    { width: 24 }, // G: Assigned By
+    { width: 16 },
+    { width: 24 },
+    { width: 28 },
+    { width: 40 },
+    { width: 52 },
+    { width: 16 },
+    { width: 24 },
   ];
   if (activities.length > 0) ws.autoFilter = { from: 'A2', to: 'G' + (2 + activities.length) };
 }
 
 export class ReportService {
   static async generateProjectsExcelReport(user: { id: string; role: string }) {
-    let projectWhere: any = {};
-    let taskWhere: any = {};
-    let activityWhere: any = {};
+    let projectFilter: any = {};
+    let taskFilter: any = {};
+    let activityFilter: any = {};
 
     if (user.role === 'TEAM_MEMBER') {
-      projectWhere = {
-        OR: [
-          { leadId: user.id },
-          { members: { some: { userId: user.id } } },
-        ]
+      const userMemberships = await ProjectMember.find({ userId: user.id }, 'projectId').lean();
+      const memberProjectIds = userMemberships.map((m: any) => m.projectId);
+      projectFilter = {
+        $or: [{ leadId: user.id }, { _id: { $in: memberProjectIds } }],
       };
-      taskWhere = {
-        project: projectWhere
-      };
-      activityWhere = {
-        userId: user.id
-      };
+      const allowedProjects = await Project.find(projectFilter, '_id').lean();
+      const allowedProjectIds = allowedProjects.map((p: any) => p._id);
+      taskFilter = { projectId: { $in: allowedProjectIds } };
+      activityFilter = { userId: user.id };
     }
 
-    const projects = await prisma.project.findMany({
-      where: projectWhere,
-      include: {
-        lead: { select: { id: true, firstName: true, lastName: true, email: true } },
-        members: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } } },
-        milestones: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const projectDocs = await Project.find(projectFilter).sort({ createdAt: -1 }).lean();
+    const projectIds = projectDocs.map((p: any) => p._id);
 
-    const tasks = await prisma.task.findMany({
-      where: taskWhere,
-      include: {
-        assignee: { select: { id: true, firstName: true, lastName: true, email: true } },
-        milestone: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [allLeads, allMemberships, allMilestones] = await Promise.all([
+      User.find({ _id: { $in: projectDocs.map((p: any) => p.leadId).filter(Boolean) } }, 'firstName lastName email _id').lean(),
+      ProjectMember.find({ projectId: { $in: projectIds } }).lean(),
+      Milestone.find({ projectId: { $in: projectIds } }).lean(),
+    ]);
 
-    const activities = await prisma.workActivity.findMany({
-      where: activityWhere,
-      include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true } },
-        project: { select: { id: true, name: true } },
-        assignedBy: { select: { id: true, firstName: true, lastName: true } },
-      },
-      orderBy: [{ dateTime: 'desc' }, { serialNo: 'desc' }],
-    });
+    const leadMap = new Map(allLeads.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email }]));
+    const memberUserIds = allMemberships.map((m: any) => m.userId);
+    const memberUsers = await User.find({ _id: { $in: memberUserIds } }, 'firstName lastName email role _id').lean();
+    const memberUserMap = new Map(memberUsers.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email, role: u.role }]));
+
+    const projects = projectDocs.map((p: any) => ({
+      ...p,
+      id: p._id,
+      lead: p.leadId ? leadMap.get(p.leadId) || null : null,
+      members: allMemberships
+        .filter((m: any) => m.projectId === p._id)
+        .map((m: any) => ({
+          user: memberUserMap.get(m.userId) || null,
+        })),
+      milestones: allMilestones.filter((ms: any) => ms.projectId === p._id).map((ms: any) => ({ ...ms, id: ms._id })),
+    }));
+
+    const taskDocs = await Task.find(taskFilter).sort({ createdAt: -1 }).lean();
+    const taskAssigneeIds = taskDocs.map((t: any) => t.assigneeId).filter(Boolean);
+    const taskMilestoneIds = taskDocs.map((t: any) => t.milestoneId).filter(Boolean);
+
+    const [taskAssignees, taskMilestones] = await Promise.all([
+      User.find({ _id: { $in: taskAssigneeIds } }, 'firstName lastName email _id').lean(),
+      Milestone.find({ _id: { $in: taskMilestoneIds } }, 'name _id').lean(),
+    ]);
+
+    const taskAssigneeMap = new Map(taskAssignees.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email }]));
+    const taskMilestoneMap = new Map(taskMilestones.map((m: any) => [m._id, { id: m._id, name: m.name }]));
+
+    const tasks = taskDocs.map((t: any) => ({
+      ...t,
+      id: t._id,
+      assignee: t.assigneeId ? taskAssigneeMap.get(t.assigneeId) || null : null,
+      milestone: t.milestoneId ? taskMilestoneMap.get(t.milestoneId) || null : null,
+    }));
+
+    const activityDocs = await WorkActivity.find(activityFilter).sort({ dateTime: -1, serialNo: -1 }).lean();
+    const actUserIds = [
+      ...new Set([
+        ...activityDocs.map((a: any) => a.userId).filter(Boolean),
+        ...activityDocs.map((a: any) => a.assignedById).filter(Boolean),
+      ]),
+    ];
+    const actProjectIds = [...new Set(activityDocs.map((a: any) => a.projectId).filter(Boolean))];
+
+    const [actUsers, actProjects] = await Promise.all([
+      User.find({ _id: { $in: actUserIds } }, 'firstName lastName email _id').lean(),
+      Project.find({ _id: { $in: actProjectIds } }, 'name _id').lean(),
+    ]);
+
+    const actUserMap = new Map(actUsers.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email }]));
+    const actProjMap = new Map(actProjects.map((p: any) => [p._id, { id: p._id, name: p.name }]));
+
+    const activities = activityDocs.map((a: any) => ({
+      ...a,
+      id: a._id,
+      user: actUserMap.get(a.userId) || null,
+      project: actProjMap.get(a.projectId) || null,
+      assignedBy: a.assignedById ? actUserMap.get(a.assignedById) || null : null,
+    }));
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'VSS Digital Team Tracker';

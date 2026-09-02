@@ -18,6 +18,7 @@ const router = Router();
 router.use(authenticate);
 
 // Task Direct Endpoints
+router.get('/tasks/my', TaskController.getMyTasks);
 router.get('/tasks/my-tasks', TaskController.getMyTasks);
 router.get('/tasks/:id', TaskController.getTask);
 router.put('/tasks/:id', validateRequest(updateTaskSchema), TaskController.updateTask);

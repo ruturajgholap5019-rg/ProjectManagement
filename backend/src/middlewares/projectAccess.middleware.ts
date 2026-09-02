@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '../types/enums.js';
-import { prisma } from '../config/database.js';
+import { Project, ProjectMember } from '../models/index.js';
 import { AppError } from './error.middleware.js';
 
 declare global {
@@ -29,25 +29,15 @@ export function requireProjectAccess(paramName = 'id') {
       return next();
     }
 
-    // Query project and membership in a single call
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: {
-        id: true,
-        leadId: true,
-        members: {
-          where: { userId: req.user.id },
-          select: { id: true },
-        },
-      },
-    });
+    const project = await Project.findById(projectId).lean();
 
     if (!project) {
       return next(new AppError('Project not found.', 404));
     }
 
-    const isLead = project.leadId === req.user.id;
-    const isMember = project.members.length > 0;
+    const isLead = (project as any).leadId === req.user.id;
+    const membership = await ProjectMember.findOne({ projectId, userId: req.user.id }).lean();
+    const isMember = !!membership;
 
     if (!isLead && !isMember) {
       return next(new AppError('Forbidden: You are not a member of this project.', 403));

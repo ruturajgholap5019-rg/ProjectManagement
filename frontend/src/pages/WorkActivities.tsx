@@ -83,15 +83,19 @@ export const WorkActivitiesPage: React.FC = () => {
 
   const handleConfirmDelete = async () => {
     if (!deletingActivityId) return;
+    const targetId = deletingActivityId;
     setIsDeleting(true);
+    // Instant real-time UI disappearance
+    setActivities((prev) => prev.filter((a) => a.id !== targetId));
+    setDeletingActivityId(null);
     try {
-      await apiFetch(`/activities/${deletingActivityId}`, {
+      await apiFetch(`/activities/${targetId}`, {
         method: 'DELETE',
       });
-      setDeletingActivityId(null);
       fetchActivities();
     } catch (err: any) {
       alert(err.message || 'Failed to delete work activity log');
+      fetchActivities();
     } finally {
       setIsDeleting(false);
     }
@@ -280,7 +284,9 @@ export const WorkActivitiesPage: React.FC = () => {
               </thead>
               <tbody>
                 {filteredActivities.map((a) => {
-                  const canManage = user?.role === 'ADMIN' || a.user.id === user?.id;
+                  const canManage = user?.role === 'ADMIN' || (a.user && a.user.id === user?.id);
+                  const memberName = a.user ? `${a.user.firstName || ''} ${a.user.lastName || ''}`.trim() || 'Team Member' : 'System User';
+                  const projectName = a.project?.name || 'Unassigned Project';
                   return (
                     <tr key={a.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s ease' }}>
                       <td style={{ padding: '12px 14px', color: 'var(--primary)', fontWeight: 800 }}>#{a.serialNo}</td>
@@ -288,25 +294,29 @@ export const WorkActivitiesPage: React.FC = () => {
                         {new Date(a.dateTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                       </td>
                       <td
-                        style={{ padding: '12px 14px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ padding: '12px 14px', color: 'var(--primary)', fontWeight: 700, cursor: a.user?.id ? 'pointer' : 'default' }}
                         onClick={() => {
-                          window.history.pushState({}, '', `/students/${a.user.id}`);
-                          window.dispatchEvent(new Event('popstate'));
+                          if (a.user?.id) {
+                            window.history.pushState({}, '', `/students/${a.user.id}`);
+                            window.dispatchEvent(new Event('popstate'));
+                          }
                         }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          {a.user.firstName} {a.user.lastName} <ArrowUpRight size={13} color="var(--text-muted)" />
+                          {memberName} {a.user?.id && <ArrowUpRight size={13} color="var(--text-muted)" />}
                         </span>
                       </td>
                       <td
-                        style={{ padding: '12px 14px', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ padding: '12px 14px', color: 'var(--primary)', fontWeight: 700, cursor: a.project?.id ? 'pointer' : 'default' }}
                         onClick={() => {
-                          window.history.pushState({}, '', `/projects/${a.project.id}`);
-                          window.dispatchEvent(new Event('popstate'));
+                          if (a.project?.id) {
+                            window.history.pushState({}, '', `/projects/${a.project.id}`);
+                            window.dispatchEvent(new Event('popstate'));
+                          }
                         }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          {a.project.name} <ArrowUpRight size={13} color="var(--text-muted)" />
+                          {projectName} {a.project?.id && <ArrowUpRight size={13} color="var(--text-muted)" />}
                         </span>
                       </td>
                       <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
@@ -316,7 +326,7 @@ export const WorkActivitiesPage: React.FC = () => {
                         {a.hoursSpent} hrs
                       </td>
                       <td style={{ padding: '12px 14px', color: 'var(--text-muted)' }}>
-                        {a.assignedBy ? `${a.assignedBy.firstName} ${a.assignedBy.lastName}` : 'Admin'}
+                        {a.assignedBy ? `${a.assignedBy.firstName || ''} ${a.assignedBy.lastName || ''}`.trim() : 'Admin'}
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {canManage ? (

@@ -1,4 +1,4 @@
-import { prisma } from '../../config/database.js';
+import { Attachment, User } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { sanitizeFileName } from '../../utils/fileValidation.js';
 
@@ -22,38 +22,41 @@ export class AttachmentService {
       throw new AppError('Attachment must belong to EXACTLY ONE parent: either a project OR a task.', 400);
     }
 
-    const attachment = await prisma.attachment.create({
-      data: {
-        projectId: input.projectId || null,
-        taskId: input.taskId || null,
-        uploadedBy: input.uploadedBy,
-        fileName: sanitizeFileName(input.fileName),
-        storedName: input.storedName,
-        filePath: input.filePath,
-        fileSize: input.fileSize,
-        mimeType: input.mimeType,
-      },
-      include: {
-        uploader: { select: { id: true, firstName: true, lastName: true } },
-      },
+    const attachment = await Attachment.create({
+      projectId: input.projectId || null,
+      taskId: input.taskId || null,
+      uploadedBy: input.uploadedBy,
+      fileName: sanitizeFileName(input.fileName),
+      storedName: input.storedName,
+      filePath: input.filePath,
+      fileSize: input.fileSize,
+      mimeType: input.mimeType,
     });
 
-    return attachment;
+    const user = await User.findById(input.uploadedBy, 'firstName lastName _id').lean();
+
+    return {
+      ...attachment.toJSON(),
+      id: attachment._id,
+      uploader: user ? { id: (user as any)._id, firstName: (user as any).firstName, lastName: (user as any).lastName } : null,
+    };
   }
 
   static async listAttachments(query: { projectId?: string; taskId?: string }) {
-    const where: any = {};
-    if (query.projectId) where.projectId = query.projectId;
-    if (query.taskId) where.taskId = query.taskId;
+    const filter: any = {};
+    if (query.projectId) filter.projectId = query.projectId;
+    if (query.taskId) filter.taskId = query.taskId;
 
-    const attachments = await prisma.attachment.findMany({
-      where,
-      include: {
-        uploader: { select: { id: true, firstName: true, lastName: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const attachments = await Attachment.find(filter).sort({ createdAt: -1 }).lean();
+    const userIds = [...new Set(attachments.map((a: any) => a.uploadedBy).filter(Boolean))];
 
-    return attachments;
+    const users = await User.find({ _id: { $in: userIds } }, 'firstName lastName _id').lean();
+    const userMap = new Map(users.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName }]));
+
+    return attachments.map((a: any) => ({
+      ...a,
+      id: a._id,
+      uploader: userMap.get(a.uploadedBy) || null,
+    }));
   }
 }

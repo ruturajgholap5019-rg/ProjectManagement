@@ -30,12 +30,16 @@ export function errorHandler(
     return sendError(res, err.message, err.statusCode, err.details);
   }
 
-  // Handle Prisma Known Request Errors if needed
-  if (err.code && typeof err.code === 'string' && err.code.startsWith('P')) {
-    return sendError(res, 'Database operation failed', 400, {
-      code: err.code,
-      meta: err.meta,
-    });
+  // Handle MongoDB Duplicate Key Errors (E11000)
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyPattern || {})[0] || 'field';
+    return sendError(res, `A record with this ${field} already exists.`, 400, { field });
+  }
+
+  // Handle Mongoose ValidationError
+  if (err.name === 'ValidationError') {
+    const messages = Object.values(err.errors || {}).map((e: any) => e.message);
+    return sendError(res, messages.join(', ') || 'Validation error', 400);
   }
 
   const message = err.message || 'Internal server error';

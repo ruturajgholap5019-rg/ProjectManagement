@@ -1,30 +1,23 @@
-import { prisma } from '../../config/database.js';
+import { Notification } from '../../models/index.js';
 
 export class NotificationService {
   static async createNotification(userId: string, data: { type: string; title: string; message: string; link?: string }) {
-    return prisma.notification.create({
-      data: {
-        userId,
-        type: data.type,
-        title: data.title,
-        message: data.message,
-        link: data.link || null,
-      },
+    const notif = await Notification.create({
+      userId,
+      type: data.type,
+      title: data.title,
+      message: data.message,
+      link: data.link || null,
     });
+    return { ...notif.toJSON(), id: notif._id };
   }
 
   static async getUserNotifications(userId: string) {
-    return prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
+    const notifs = await Notification.find({ userId }).sort({ createdAt: -1 }).limit(20).lean();
+    return notifs.map((n: any) => ({ ...n, id: n._id }));
   }
 
   static async markAllAsRead(userId: string) {
-    return prisma.notification.updateMany({
-      where: { userId, isRead: false },
-      data: { isRead: true },
-    });
+    return Notification.updateMany({ userId, isRead: false }, { isRead: true });
   }
 }

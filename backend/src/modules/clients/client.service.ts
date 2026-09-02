@@ -1,4 +1,4 @@
-import { prisma } from '../../config/database.js';
+import { Client, Project } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 
 export interface CreateClientDTO {
@@ -21,37 +21,37 @@ export interface UpdateClientDTO {
 
 export class ClientService {
   static async getAllClients() {
-    return prisma.client.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        projects: {
-          select: {
-            id: true,
-            name: true,
-            status: true,
-            projectType: true,
-          },
-        },
-      },
-    });
+    const clients = await Client.find().sort({ createdAt: -1 }).lean();
+    const clientIds = clients.map((c: any) => c._id);
+
+    const projects = await Project.find(
+      { clientId: { $in: clientIds } },
+      'name status projectType clientId _id'
+    ).lean();
+
+    return clients.map((c: any) => ({
+      ...c,
+      id: c._id,
+      projects: projects
+        .filter((p: any) => p.clientId === c._id)
+        .map((p: any) => ({ id: p._id, name: p.name, status: p.status, projectType: p.projectType })),
+    }));
   }
 
   static async getClientById(id: string) {
-    const client = await prisma.client.findUnique({
-      where: { id },
-      include: {
-        projects: {
-          select: {
-            id: true,
-            name: true,
-            status: true,
-            projectType: true,
-          },
-        },
-      },
-    });
+    const client = await Client.findById(id).lean();
     if (!client) throw new AppError('Client not found', 404);
-    return client;
+
+    const projects = await Project.find(
+      { clientId: id },
+      'name status projectType _id'
+    ).lean();
+
+    return {
+      ...(client as any),
+      id: (client as any)._id,
+      projects: projects.map((p: any) => ({ id: p._id, name: p.name, status: p.status, projectType: p.projectType })),
+    };
   }
 
   static async createClient(data: CreateClientDTO) {
@@ -59,51 +59,40 @@ export class ClientService {
       throw new AppError('Client name is required', 400);
     }
 
-    const client = await prisma.client.create({
-      data: {
-        name: data.name.trim(),
-        address: data.address?.trim() || null,
-        referencePerson: data.referencePerson?.trim() || null,
-        phone: data.phone?.trim() || null,
-        email: data.email?.trim() || null,
-      },
+    const client = await Client.create({
+      name: data.name.trim(),
+      address: data.address?.trim() || null,
+      referencePerson: data.referencePerson?.trim() || null,
+      phone: data.phone?.trim() || null,
+      email: data.email?.trim() || null,
     });
 
     if (data.projectId) {
-      await prisma.project.update({
-        where: { id: data.projectId },
-        data: {
-          clientId: client.id,
-          ...(data.referencePerson ? { referencePerson: data.referencePerson.trim() } : {}),
-        },
+      await Project.findByIdAndUpdate(data.projectId, {
+        clientId: client._id,
+        ...(data.referencePerson ? { referencePerson: data.referencePerson.trim() } : {}),
       });
     }
 
-    return this.getClientById(client.id);
+    return this.getClientById(client._id);
   }
 
   static async updateClient(id: string, data: UpdateClientDTO) {
-    const client = await prisma.client.findUnique({ where: { id } });
+    const client = await Client.findById(id);
     if (!client) throw new AppError('Client not found', 404);
 
-    await prisma.client.update({
-      where: { id },
-      data: {
-        ...(data.name && { name: data.name.trim() }),
-        ...(data.address !== undefined && { address: data.address?.trim() || null }),
-        ...(data.referencePerson !== undefined && { referencePerson: data.referencePerson?.trim() || null }),
-        ...(data.phone !== undefined && { phone: data.phone?.trim() || null }),
-        ...(data.email !== undefined && { email: data.email?.trim() || null }),
-      },
-    });
+    if (data.name !== undefined) client.name = data.name.trim();
+    if (data.address !== undefined) client.address = data.address?.trim() || null;
+    if (data.referencePerson !== undefined) client.referencePerson = data.referencePerson?.trim() || null;
+    if (data.phone !== undefined) client.phone = data.phone?.trim() || null;
+    if (data.email !== undefined) client.email = data.email?.trim() || null;
+
+    await client.save();
 
     if (data.projectId) {
-      await prisma.project.update({
-        where: { id: data.projectId },
-        data: {
-          clientId: id,
-          ...(data.referencePerson ? { referencePerson: data.referencePerson.trim() } : {}),
-        },
+      await Project.findByIdAndUpdate(data.projectId, {
+        clientId: id,
+        ...(data.referencePerson ? { referencePerson: data.referencePerson.trim() } : {}),
       });
     }
 
@@ -111,16 +100,12 @@ export class ClientService {
   }
 
   static async deleteClient(id: string) {
-    const client = await prisma.client.findUnique({ where: { id } });
+    const client = await Client.findById(id);
     if (!client) throw new AppError('Client not found', 404);
 
-    // Unlink projects using this client
-    await prisma.project.updateMany({
-      where: { clientId: id },
-      data: { clientId: null },
-    });
+    await Project.updateMany({ clientId: id }, { clientId: null });
+    await Client.findByIdAndDelete(id);
 
-    await prisma.client.delete({ where: { id } });
     return { success: true, message: 'Client deleted successfully' };
   }
 }

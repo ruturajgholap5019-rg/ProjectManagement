@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service.js';
 import { sendSuccess } from '../../utils/apiResponse.js';
-import { prisma } from '../../config/database.js';
+import { User } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 
 export class AuthController {
@@ -64,36 +64,38 @@ export class AuthController {
         throw new AppError('Unauthorized', 401);
       }
 
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: {
-          id: true,
-          email: true,
-          rawPassword: req.user.role === 'ADMIN' ? true : false,
-          firstName: true,
-          lastName: true,
-          role: true,
-          memberType: true,
-          avatarUrl: true,
-          phone: true,
-          bio: true,
-          instagramUrl: true,
-          linkedinUrl: true,
-          githubUrl: true,
-          youtubeUrl: true,
-          facebookUrl: true,
-          isActive: true,
-          mustChangePassword: true,
-          lastLoginAt: true,
-          createdAt: true,
-        },
-      });
+      const user = await User.findById(req.user.id).lean();
 
       if (!user) {
         throw new AppError('User not found', 404);
       }
 
-      sendSuccess(res, user, 'Current user profile fetched');
+      const safeUser: any = {
+        id: (user as any)._id,
+        email: (user as any).email,
+        firstName: (user as any).firstName,
+        lastName: (user as any).lastName,
+        role: (user as any).role,
+        memberType: (user as any).memberType,
+        avatarUrl: (user as any).avatarUrl,
+        phone: (user as any).phone,
+        bio: (user as any).bio,
+        instagramUrl: (user as any).instagramUrl,
+        linkedinUrl: (user as any).linkedinUrl,
+        githubUrl: (user as any).githubUrl,
+        youtubeUrl: (user as any).youtubeUrl,
+        facebookUrl: (user as any).facebookUrl,
+        isActive: (user as any).isActive,
+        mustChangePassword: (user as any).mustChangePassword,
+        lastLoginAt: (user as any).lastLoginAt,
+        createdAt: (user as any).createdAt,
+      };
+
+      if (req.user.role === 'ADMIN') {
+        safeUser.rawPassword = (user as any).rawPassword;
+      }
+
+      sendSuccess(res, safeUser, 'Current user profile fetched');
     } catch (error) {
       next(error);
     }

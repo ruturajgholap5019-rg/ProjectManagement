@@ -1,83 +1,80 @@
-import { prisma } from '../../config/database.js';
+import { Milestone, Project, Task } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { MilestoneStatus } from '../../types/enums.js';
 
 export class MilestoneService {
-  static async createMilestone(projectId: string, data: { name: string; description?: string; sortOrder?: number; startDate?: string; dueDate?: string }) {
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
+  static async createMilestone(
+    projectId: string,
+    data: { name: string; description?: string; sortOrder?: number; startDate?: string; dueDate?: string }
+  ) {
+    const project = await Project.findById(projectId);
     if (!project) throw new AppError('Project not found', 404);
 
-    const sortOrder = data.sortOrder ?? (await prisma.milestone.count({ where: { projectId } }));
+    const sortOrder = data.sortOrder ?? (await Milestone.countDocuments({ projectId }));
 
-    const milestone = await prisma.milestone.create({
-      data: {
-        projectId,
-        name: data.name.trim(),
-        description: data.description?.trim(),
-        sortOrder,
-        startDate: data.startDate ? new Date(data.startDate) : null,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      },
+    const milestone = await Milestone.create({
+      projectId,
+      name: data.name.trim(),
+      description: data.description?.trim() || null,
+      sortOrder,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
     });
 
-    return milestone;
+    return {
+      ...milestone.toJSON(),
+      id: milestone._id,
+    };
   }
 
   static async listMilestones(projectId: string) {
-    const milestones = await prisma.milestone.findMany({
-      where: { projectId },
-      include: {
-        _count: {
-          select: { tasks: true },
-        },
-      },
-      orderBy: { sortOrder: 'asc' },
+    const milestones = await Milestone.find({ projectId }).sort({ sortOrder: 1 }).lean();
+    const milestoneIds = milestones.map((m: any) => m._id);
+
+    const tasks = await Task.find({ milestoneId: { $in: milestoneIds } }, 'milestoneId status _id').lean();
+
+    return milestones.map((m: any) => {
+      const milestoneTasks = tasks.filter((t: any) => t.milestoneId === m._id);
+      const completedTasks = milestoneTasks.filter((t: any) => t.status === 'COMPLETED').length;
+
+      return {
+        ...m,
+        id: m._id,
+        totalTasks: milestoneTasks.length,
+        completedTasks,
+      };
     });
-
-    // Derive completed tasks count for each milestone
-    const milestoneIds = milestones.map((m: any) => m.id);
-    const completedCounts = await prisma.task.groupBy({
-      by: ['milestoneId'],
-      where: {
-        milestoneId: { in: milestoneIds },
-        status: 'COMPLETED',
-      },
-      _count: { id: true },
-    });
-
-    const countMap = new Map(completedCounts.map((c: any) => [c.milestoneId!, c._count.id]));
-
-    return milestones.map((m: any) => ({
-      ...m,
-      totalTasks: m._count.tasks,
-      completedTasks: countMap.get(m.id) || 0,
-    }));
   }
 
-  static async updateMilestone(id: string, data: { name?: string; description?: string; status?: MilestoneStatus; sortOrder?: number; startDate?: string; dueDate?: string }) {
-    const existing = await prisma.milestone.findUnique({ where: { id } });
+  static async updateMilestone(
+    id: string,
+    data: { name?: string; description?: string; status?: MilestoneStatus; sortOrder?: number; startDate?: string; dueDate?: string }
+  ) {
+    const existing = await Milestone.findById(id);
     if (!existing) throw new AppError('Milestone not found', 404);
 
-    const updated = await prisma.milestone.update({
-      where: { id },
-      data: {
-        name: data.name?.trim(),
-        description: data.description?.trim(),
-        status: data.status,
-        sortOrder: data.sortOrder,
-        startDate: data.startDate ? new Date(data.startDate) : undefined,
-        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-      },
-    });
+    if (data.name !== undefined) existing.name = data.name.trim();
+    if (data.description !== undefined) existing.description = data.description.trim() || null;
+    if (data.status !== undefined) existing.status = data.status;
+    if (data.sortOrder !== undefined) existing.sortOrder = data.sortOrder;
+    if (data.startDate !== undefined) existing.startDate = data.startDate ? new Date(data.startDate) : null;
+    if (data.dueDate !== undefined) existing.dueDate = data.dueDate ? new Date(data.dueDate) : null;
 
-    return updated;
+    await existing.save();
+
+    return {
+      ...existing.toJSON(),
+      id: existing._id,
+    };
   }
 
   static async deleteMilestone(id: string) {
-    const existing = await prisma.milestone.findUnique({ where: { id } });
+    const existing = await Milestone.findById(id);
     if (!existing) throw new AppError('Milestone not found', 404);
 
-    await prisma.milestone.delete({ where: { id } });
+    await Task.updateMany({ milestoneId: id }, { milestoneId: null });
+    await Milestone.findByIdAndDelete(id);
+
     return { message: 'Milestone deleted. Tasks unlinked.' };
   }
 }
