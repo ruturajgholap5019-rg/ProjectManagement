@@ -6,19 +6,36 @@ export const BASE_URL = import.meta.env.VITE_API_URL || (isLocalhost ? 'http://l
 
 interface RequestOptions extends RequestInit {
   requiresAuth?: boolean;
+  skipCache?: boolean;
 }
 
+interface CacheItem {
+  data: any;
+  timestamp: number;
+}
+
+// In-Memory Client Response Cache (30s TTL for instant page switching)
+const apiResponseCache = new Map<string, CacheItem>();
 const inFlightRequests = new Map<string, Promise<any>>();
 
-export function invalidateApiCache(_pattern?: string) {
-  // No-op - all requests are direct live
+export function invalidateApiCache(pattern?: string) {
+  if (!pattern) {
+    apiResponseCache.clear();
+    return;
+  }
+  const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+  for (const key of apiResponseCache.keys()) {
+    if (regex.test(key)) {
+      apiResponseCache.delete(key);
+    }
+  }
 }
 
 /**
  * Non-blocking prefetch helper that pre-warms endpoints
  */
 export function prefetchEndpoint(endpoint: string) {
-  if (!inFlightRequests.has(endpoint)) {
+  if (!inFlightRequests.has(`GET:${endpoint}`) && !apiResponseCache.has(`GET:${endpoint}`)) {
     apiFetch(endpoint).catch(() => {
       // Silently ignore background prefetch errors
     });
@@ -26,12 +43,24 @@ export function prefetchEndpoint(endpoint: string) {
 }
 
 export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { requiresAuth = true, headers: customHeaders, ...restOptions } = options;
+  const { requiresAuth = true, skipCache = false, headers: customHeaders, ...restOptions } = options;
   const method = (restOptions.method || 'GET').toUpperCase();
-
   const cacheKey = `${method}:${endpoint}`;
 
-  // Request deduplication for identical concurrent in-flight GET requests
+  // If a mutation happens (POST, PUT, DELETE, PATCH), invalidate related caches immediately
+  if (method !== 'GET') {
+    invalidateApiCache();
+  }
+
+  // 1. Instant Cache Hit for GET requests (0ms response time!)
+  if (method === 'GET' && !skipCache) {
+    const cached = apiResponseCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 30000) {
+      return cached.data as T;
+    }
+  }
+
+  // 2. Request deduplication for identical concurrent in-flight GET requests
   if (method === 'GET' && inFlightRequests.has(cacheKey)) {
     return inFlightRequests.get(cacheKey)! as Promise<T>;
   }
@@ -52,7 +81,7 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for cold starts
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
       let response = await fetch(`${BASE_URL}${endpoint}`, {
@@ -98,10 +127,15 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
         throw new Error(data.message || 'An unexpected error occurred');
       }
 
+      // Save to client cache on GET success
+      if (method === 'GET') {
+        apiResponseCache.set(cacheKey, { data: data.data, timestamp: Date.now() });
+      }
+
       return data.data;
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        throw new Error('Server request timed out. The backend server might be starting up from cold sleep.');
+        throw new Error('Request timed out. Please check your internet connection.');
       }
       throw err;
     } finally {
@@ -116,4 +150,3 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
 
   return fetchPromise;
 }
-

@@ -47,7 +47,11 @@ export class AuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-      sendSuccess(res, { accessToken: result.accessToken }, 'Token refreshed successfully');
+      sendSuccess(
+        res,
+        { accessToken: result.accessToken, user: result.user },
+        'Token refreshed successfully'
+      );
     } catch (error) {
       next(error);
     }

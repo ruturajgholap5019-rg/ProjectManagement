@@ -91,7 +91,28 @@ export class AuthService {
         role: user.role,
         mustChangePassword: user.mustChangePassword,
       });
-      return tokens;
+
+      return {
+        ...tokens,
+        user: {
+          id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          memberType: user.memberType,
+          avatarUrl: user.avatarUrl,
+          phone: user.phone,
+          bio: user.bio,
+          instagramUrl: user.instagramUrl,
+          linkedinUrl: user.linkedinUrl,
+          githubUrl: user.githubUrl,
+          youtubeUrl: user.youtubeUrl,
+          facebookUrl: user.facebookUrl,
+          rawPassword: user.role === 'ADMIN' ? user.rawPassword : undefined,
+          mustChangePassword: user.mustChangePassword,
+        },
+      };
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError('Invalid or expired refresh token', 401);
