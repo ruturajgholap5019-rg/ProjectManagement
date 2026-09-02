@@ -13,7 +13,7 @@ import {
   ActivityLog,
 } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
-import { cacheGet, cacheSet } from '../../config/redis.js';
+import { cacheGet, cacheSet, cacheDelPattern } from '../../config/redis.js';
 
 export interface CreateUserInput {
   email: string;
@@ -97,6 +97,9 @@ export class UserService {
     } catch (emailErr) {
       console.error('Failed to send welcome email notification:', emailErr);
     }
+
+    await cacheDelPattern('users:*');
+    await cacheDelPattern('dashboard:*');
 
     return {
       user: {
@@ -332,6 +335,9 @@ export class UserService {
       }
     }
 
+    await cacheDelPattern('users:*');
+    await cacheDelPattern('dashboard:*');
+
     return {
       id: existing._id,
       email: existing.email,
@@ -436,6 +442,9 @@ export class UserService {
       }
     }
 
+    await cacheDelPattern('users:*');
+    await cacheDelPattern('dashboard:*');
+
     return {
       id: user._id,
       email: user.email,
@@ -458,6 +467,8 @@ export class UserService {
     user.rawPassword = tempPassword;
     user.mustChangePassword = true;
     await user.save();
+
+    await cacheDelPattern('users:*');
 
     // Send password reset email notification
     const { emailService } = await import('../../services/email.service.js');
@@ -522,6 +533,10 @@ export class UserService {
 
     // 8. Delete user account
     await User.findByIdAndDelete(userId);
+
+    // Invalidate users and dashboard caches
+    await cacheDelPattern('users:*');
+    await cacheDelPattern('dashboard:*');
 
     return { message: 'User account deleted successfully' };
   }
