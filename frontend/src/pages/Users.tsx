@@ -1518,18 +1518,6 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
           </div>
         </form>
       </Modal>
-
-      {/* Delete User Confirmation Modal */}
-      <ConfirmModal
-        isOpen={Boolean(deletingUserId)}
-        onClose={() => setDeletingUserId(null)}
-        onConfirm={handleConfirmDelete}
-        title="Delete Member Account"
-        message="Are you sure you want to permanently delete this member account? This action will remove their access and project assignments immediately."
-        confirmText="Delete Account"
-        variant="danger"
-        isLoading={isDeleting}
-      />
     </div>
   );
 };
