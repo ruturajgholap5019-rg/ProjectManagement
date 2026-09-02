@@ -27,11 +27,6 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
   const { requiresAuth = true, headers: customHeaders, ...restOptions } = options;
   const method = (restOptions.method || 'GET').toUpperCase();
 
-  // Guard: Block delete and update operations (View-Only Mode)
-  if (['DELETE', 'PUT', 'PATCH'].includes(method)) {
-    throw new Error(`Operation disabled: Update and delete operations are restricted. The application is running in view-only mode.`);
-  }
-
   const cacheKey = `${method}:${endpoint}`;
 
   // Request deduplication for identical concurrent in-flight GET requests

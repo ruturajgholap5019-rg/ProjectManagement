@@ -14,7 +14,7 @@ export class SkillService {
         proficiency: data.proficiency || 'INTERMEDIATE',
         notes: data.notes?.trim() || null,
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     return {

@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 
 let mongoServer: MongoMemoryServer;
-let request: supertest.SuperTest<supertest.Test>;
+let request: any;
 
 // Tokens & IDs captured during test execution
 let adminToken: string;

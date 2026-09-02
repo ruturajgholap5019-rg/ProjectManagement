@@ -406,7 +406,7 @@ export class UserService {
         await ProjectMember.findOneAndUpdate(
           { projectId, userId },
           { projectId, userId },
-          { upsert: true, new: true }
+          { upsert: true, returnDocument: 'after' }
         );
 
         // Set lead if no lead currently
