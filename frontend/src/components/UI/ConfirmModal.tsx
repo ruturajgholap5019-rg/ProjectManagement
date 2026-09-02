@@ -29,7 +29,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   const iconColor = variant === 'danger' ? 'var(--danger)' : variant === 'warning' ? '#f59e0b' : 'var(--primary)';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth="480px">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
           <div
