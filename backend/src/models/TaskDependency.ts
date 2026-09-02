@@ -6,6 +6,8 @@ export interface ITaskDependency {
   id: string;
   taskId: string;
   dependsOnId: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const TaskDependencySchema = new Schema<ITaskDependency>(
@@ -15,7 +17,7 @@ const TaskDependencySchema = new Schema<ITaskDependency>(
     dependsOnId: { type: String, required: true, index: true },
   },
   {
-    timestamps: false,
+    timestamps: true,
     toJSON: {
       virtuals: true,
       transform: (_doc, ret: any) => {
@@ -39,7 +41,7 @@ TaskDependencySchema.virtual('id').get(function (this: any) {
   return this._id;
 });
 
+// A task pair can only have one directed dependency edge.
 TaskDependencySchema.index({ taskId: 1, dependsOnId: 1 }, { unique: true });
 
-export const TaskDependency =
-  mongoose.models.TaskDependency || mongoose.model<ITaskDependency>('TaskDependency', TaskDependencySchema, 'task_dependencies');
+export const TaskDependency = mongoose.models.TaskDependency || mongoose.model<ITaskDependency>('TaskDependency', TaskDependencySchema, 'taskDependencies');
