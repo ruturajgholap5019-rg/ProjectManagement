@@ -1,6 +1,8 @@
 import { useAuthStore } from '../store/authStore';
 
-export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+export const BASE_URL = import.meta.env.VITE_API_URL || (isLocalhost ? 'http://localhost:3001/api/v1' : 'https://project-tracker-backend-303t.onrender.com/api/v1');
 
 interface RequestOptions extends RequestInit {
   requiresAuth?: boolean;
@@ -49,48 +51,62 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
       }
     }
 
-    let response = await fetch(`${BASE_URL}${endpoint}`, {
-      headers,
-      credentials: 'include',
-      ...restOptions,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for cold starts
 
-    // Handle Token Refresh on 401 Unauthorized
-    if (response.status === 401 && requiresAuth && !endpoint.includes('/auth/refresh')) {
-      const refreshed = await authStore.refreshSession();
-      if (refreshed) {
-        const newAccessToken = useAuthStore.getState().accessToken;
-        if (newAccessToken) {
-          headers['Authorization'] = `Bearer ${newAccessToken}`;
-          response = await fetch(`${BASE_URL}${endpoint}`, {
-            headers,
-            credentials: 'include',
-            ...restOptions,
-          });
+    try {
+      let response = await fetch(`${BASE_URL}${endpoint}`, {
+        headers,
+        credentials: 'include',
+        signal: options.signal || controller.signal,
+        ...restOptions,
+      });
+
+      // Handle Token Refresh on 401 Unauthorized
+      if (response.status === 401 && requiresAuth && !endpoint.includes('/auth/refresh')) {
+        const refreshed = await authStore.refreshSession();
+        if (refreshed) {
+          const newAccessToken = useAuthStore.getState().accessToken;
+          if (newAccessToken) {
+            headers['Authorization'] = `Bearer ${newAccessToken}`;
+            response = await fetch(`${BASE_URL}${endpoint}`, {
+              headers,
+              credentials: 'include',
+              signal: options.signal || controller.signal,
+              ...restOptions,
+            });
+          }
+        } else {
+          authStore.logout();
+          throw new Error('Session expired. Please log in again.');
         }
+      }
+
+      let data: any;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
       } else {
-        authStore.logout();
-        throw new Error('Session expired. Please log in again.');
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(`Server error (${response.status}): ${text || response.statusText}`);
+        }
+        data = { data: text };
       }
-    }
 
-    let data: any;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
       if (!response.ok) {
-        throw new Error(`Server error (${response.status}): ${text || response.statusText}`);
+        throw new Error(data.message || 'An unexpected error occurred');
       }
-      data = { data: text };
-    }
 
-    if (!response.ok) {
-      throw new Error(data.message || 'An unexpected error occurred');
+      return data.data;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Server request timed out. The backend server might be starting up from cold sleep.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return data.data;
   })();
 
   if (method === 'GET') {

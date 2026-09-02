@@ -30,7 +30,8 @@ interface AuthState {
   fetchProfile: () => Promise<void>;
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const BASE_URL = import.meta.env.VITE_API_URL || (isLocalhost ? 'http://localhost:3001/api/v1' : 'https://project-tracker-backend-303t.onrender.com/api/v1');
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -60,11 +61,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
       const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -84,29 +89,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
       return false;
+    } finally {
+      clearTimeout(timeoutId);
     }
   },
 
   fetchProfile: async () => {
     const token = get().accessToken;
-    if (!token) return;
+    if (!token) {
+      set({ isLoading: false });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     try {
       const res = await fetch(`${BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
         credentials: 'include',
+        signal: controller.signal,
       });
 
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
           set({ user: data.data, isAuthenticated: true, isLoading: false });
+        } else {
+          set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
         }
       } else {
         set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
       }
     } catch {
       set({ isLoading: false });
+    } finally {
+      clearTimeout(timeoutId);
     }
   },
 }));

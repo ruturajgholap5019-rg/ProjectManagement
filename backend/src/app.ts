@@ -69,6 +69,16 @@ const refreshLimiter = rateLimit({
 app.use('/api/v1/auth/login', loginLimiter);
 app.use('/api/v1/auth/refresh', refreshLimiter);
 
+// Root Status Endpoint
+app.get('/', (_req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: 'Project Tracker Backend API is running',
+    version: '1.0.0',
+    docs: '/api/v1/health',
+  });
+});
+
 // Health Check Endpoint
 app.get('/api/v1/health', (_req, res) => {
   return sendSuccess(
