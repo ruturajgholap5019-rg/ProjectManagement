@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCategoryFilterStore, CategoryItem } from '../../store/categoryFilterStore';
+import { useToast } from '../../context/ToastContext';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { Input, TextArea } from './Input';
@@ -12,6 +13,7 @@ interface CategoryManagerModalProps {
 
 export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOpen, onClose }) => {
   const { categories, createCategory, updateCategory, deleteCategory } = useCategoryFilterStore();
+  const { showToast } = useToast();
 
   // Create Form State
   const [isAddMode, setIsAddMode] = useState(false);
@@ -43,9 +45,10 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOp
     setIsSubmitting(true);
     try {
       await createCategory({ code, name, icon, description });
+      showToast('Category created successfully', 'success');
       resetCreateForm();
     } catch (err: any) {
-      alert(err.message || 'Failed to create project category');
+      showToast(err.message || 'Failed to create project category', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -62,9 +65,10 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOp
   const handleSaveEdit = async (id: string) => {
     try {
       await updateCategory(id, { code: editCode, name: editName, icon: editIcon, description: editDescription });
+      showToast('Category updated successfully', 'success');
       setEditingId(null);
     } catch (err: any) {
-      alert(err.message || 'Failed to update category');
+      showToast(err.message || 'Failed to update category', 'error');
     }
   };
 
@@ -72,8 +76,9 @@ export const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOp
     if (!window.confirm(`Are you sure you want to delete category "${cat.name}"?`)) return;
     try {
       await deleteCategory(cat.id);
+      showToast('Category deleted successfully', 'success');
     } catch (err: any) {
-      alert(err.message || 'Failed to delete category');
+      showToast(err.message || 'Failed to delete category', 'error');
     }
   };
 

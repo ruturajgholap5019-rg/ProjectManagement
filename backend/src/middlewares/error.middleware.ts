@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { sendError } from '../utils/apiResponse.js';
 import { logger } from '../utils/logger.js';
 import { env } from '../config/env.js';
+import { randomUUID } from 'crypto';
 
 export class AppError extends Error {
   public statusCode: number;
@@ -21,11 +22,16 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): Response {
+  const requestId = randomUUID().slice(0, 8);
+
   logger.error(err.message || 'Unhandled error occurred', {
+    requestId,
     stack: err.stack,
     details: err.details,
+    statusCode: err.statusCode,
   });
 
+  // Intentional application errors — always show the message to the client
   if (err instanceof AppError) {
     return sendError(res, err.message, err.statusCode, err.details);
   }
@@ -42,12 +48,15 @@ export function errorHandler(
     return sendError(res, messages.join(', ') || 'Validation error', 400);
   }
 
-  const message = err.message || 'Internal server error';
+  // Unhandled errors: in production, hide internal details from clients
+  if (env.NODE_ENV === 'production') {
+    return sendError(res, 'An unexpected error occurred. Please try again later.', 500, { requestId });
+  }
 
-  return sendError(
-    res,
-    message,
-    err.statusCode || 500,
-    { details: err.details, code: err.code }
-  );
+  // In development, expose the error for easier debugging
+  return sendError(res, err.message || 'Internal server error', err.statusCode || 500, {
+    details: err.details,
+    code: err.code,
+    requestId,
+  });
 }

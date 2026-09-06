@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ProjectMember, User, Project, Task } from '../../models/index.js';
 import { sendSuccess } from '../../utils/apiResponse.js';
 import { AppError } from '../../middlewares/error.middleware.js';
+import { cacheDelPattern } from '../../config/redis.js';
 
 export class ProjectMemberController {
   static async listMembers(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -75,6 +76,9 @@ export class ProjectMemberController {
 
       const membership = await ProjectMember.create({ projectId, userId });
 
+      await cacheDelPattern('projects:*');
+      await cacheDelPattern('dashboard:*');
+
       sendSuccess(
         res,
         {
@@ -111,6 +115,9 @@ export class ProjectMemberController {
       }
 
       await ProjectMember.findOneAndDelete({ projectId, userId });
+
+      await cacheDelPattern('projects:*');
+      await cacheDelPattern('dashboard:*');
 
       sendSuccess(res, null, 'Member removed from project');
     } catch (error) {

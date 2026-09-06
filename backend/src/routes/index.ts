@@ -44,8 +44,9 @@ userRouter.get('/', UserController.listUsers);
 userRouter.get('/:id', UserController.getUserById);
 userRouter.post('/', UserController.createUser);
 userRouter.put('/:id', UserController.updateUser);
-userRouter.patch('/:id/activate', UserController.activateUser);
-userRouter.patch('/:id/deactivate', UserController.deactivateUser);
+userRouter.patch('/:id/status', UserController.setStatus);       // Used by frontend
+userRouter.patch('/:id/activate', UserController.activateUser);   // Legacy alias
+userRouter.patch('/:id/deactivate', UserController.deactivateUser); // Legacy alias
 userRouter.post('/:id/reset-password', UserController.resetPassword);
 userRouter.delete('/:id', UserController.deleteUser);
 

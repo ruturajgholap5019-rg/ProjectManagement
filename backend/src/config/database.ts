@@ -26,7 +26,7 @@ export async function connectDB(): Promise<typeof mongoose> {
     try {
       logger.info(`🔌 Connecting to MongoDB (Attempt ${attempt}/${maxRetries})...`);
       const conn = await mongoose.connect(dbUrl, {
-        autoIndex: true,
+        autoIndex: env.NODE_ENV !== 'production', // Only auto-create indexes in dev/test
         serverSelectionTimeoutMS: 15000,
       });
 

@@ -6,7 +6,6 @@ export interface IUser {
   id: string;
   email: string;
   passwordHash: string;
-  rawPassword?: string | null;
   firstName: string;
   lastName: string;
   role: string;
@@ -31,7 +30,6 @@ const UserSchema = new Schema<IUser>(
     _id: { type: String, default: () => randomUUID() },
     email: { type: String, required: true, unique: true, trim: true, lowercase: true, index: true },
     passwordHash: { type: String, required: true },
-    rawPassword: { type: String, default: null },
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     role: { type: String, required: true, default: 'TEAM_MEMBER', index: true },

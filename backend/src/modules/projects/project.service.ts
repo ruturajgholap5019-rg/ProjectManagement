@@ -16,6 +16,7 @@ import { ProjectStatus, ProjectType, Priority, UserRole } from '../../types/enum
 import { emailService } from '../../services/email.service.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import { cacheGet, cacheSet, cacheDelPattern } from '../../config/redis.js';
+import { escapeRegex } from '../../utils/sanitize.js';
 
 export interface CreateProjectInput {
   name: string;
@@ -62,15 +63,13 @@ export class ProjectService {
       createdBy: input.createdBy,
     });
 
-    for (const userId of memberSet) {
-      try {
-        await ProjectMember.create({
-          projectId: project._id,
-          userId,
-        });
-      } catch {
-        // Ignore duplicate project member errors
-      }
+    const membersToInsert = Array.from(memberSet).map((userId) => ({
+      projectId: project._id,
+      userId,
+    }));
+
+    if (membersToInsert.length > 0) {
+      await ProjectMember.insertMany(membersToInsert);
     }
 
     // Notify assigned members via Email & In-App Notification
@@ -119,6 +118,11 @@ export class ProjectService {
           status: { $nin: [ProjectStatus.COMPLETED, ProjectStatus.CANCELLED, ProjectStatus.AT_RISK] },
         }).lean();
 
+        if (expiredProjects.length === 0) return;
+
+        // Hoist admin query outside loop to eliminate N+1 query
+        const admins = await User.find({ role: UserRole.ADMIN, isActive: true }).lean();
+
         for (const project of expiredProjects) {
           const deadlineDate = (project as any).targetEndDate
             ? new Date((project as any).targetEndDate).toLocaleDateString('en-US', {
@@ -134,7 +138,6 @@ export class ProjectService {
             statusReason: reason,
           });
 
-          const admins = await User.find({ role: UserRole.ADMIN, isActive: true }).lean();
           const leadUser = (project as any).leadId ? await User.findById((project as any).leadId).lean() : null;
 
           const notifyUsersMap = new Map<string, { id: string; email: string; name: string }>();
@@ -197,14 +200,15 @@ export class ProjectService {
     }
 
     if (filters.search) {
-      query.name = new RegExp(filters.search, 'i');
+      const safe = escapeRegex(filters.search.trim().slice(0, 50));
+      query.name = new RegExp(safe, 'i');
     }
 
     const cacheKey = `projects:${user.role}:${user.id}:${filters.status || 'all'}:${filters.search || 'none'}`;
     const cached = await cacheGet<any[]>(cacheKey);
     if (cached) return cached;
 
-    const projectDocs = await Project.find(query).sort({ createdAt: -1 }).lean();
+    const projectDocs = await Project.find(query).sort({ createdAt: -1 }).limit(100).lean();
     const projectIds = projectDocs.map((p: any) => p._id);
 
     const [allLeads, allPrevLeads, allCreators, allClients, allMemberships, allTasks] = await Promise.all([
@@ -258,24 +262,24 @@ export class ProjectService {
       (project as any).clientId ? Client.findById((project as any).clientId).lean() : null,
       ProjectMember.find({ projectId }).lean(),
       Milestone.find({ projectId }).sort({ sortOrder: 1 }).lean(),
-      Task.find({ projectId }).lean(),
+      Task.find({ projectId }).sort({ dueDate: 1 }).lean(),
     ]);
 
     const memberUserIds = memberships.map((m: any) => m.userId);
     const memberUsers = await User.find(
       { _id: { $in: memberUserIds } },
-      'firstName lastName email role memberType _id'
+      'firstName lastName email avatarUrl role memberType _id'
     ).lean();
-    const memberUserMap = new Map(memberUsers.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email, role: u.role, memberType: u.memberType }]));
+    const memberUserMap = new Map(memberUsers.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName, email: u.email, avatarUrl: u.avatarUrl, role: u.role, memberType: u.memberType }]));
 
     const completedTasks = tasks.filter((t: any) => t.status === 'COMPLETED').length;
 
     return {
-      ...(project as any),
+      ...project,
       id: (project as any)._id,
       lead: lead ? { id: (lead as any)._id, firstName: (lead as any).firstName, lastName: (lead as any).lastName, email: (lead as any).email, avatarUrl: (lead as any).avatarUrl } : null,
       previousLead: previousLead ? { id: (previousLead as any)._id, firstName: (previousLead as any).firstName, lastName: (previousLead as any).lastName, email: (previousLead as any).email } : null,
-      creator: creator ? { id: (creator as any)._id, firstName: (creator as any).firstName, lastName: (creator as any).lastName, email: (creator as any).email, role: (creator as any).role } : null,
+      creator: creator ? { id: (creator as any)._id, firstName: (creator as any).firstName, lastName: (creator as any).lastName, email: (creator as any).email } : null,
       client: client ? { id: (client as any)._id, name: (client as any).name, phone: (client as any).phone, email: (client as any).email, address: (client as any).address, referencePerson: (client as any).referencePerson } : null,
       members: memberships.map((m: any) => ({
         id: m._id,
@@ -301,6 +305,10 @@ export class ProjectService {
     }
 
     await existing.save();
+
+    await cacheDelPattern('projects:*');
+    await cacheDelPattern('dashboard:*');
+
     return this.getProjectById(projectId);
   }
 
@@ -359,6 +367,10 @@ export class ProjectService {
     existing.handedOverAt = handedOverAt;
 
     await existing.save();
+
+    await cacheDelPattern('projects:*');
+    await cacheDelPattern('dashboard:*');
+
     return this.getProjectById(projectId);
   }
 
@@ -388,6 +400,9 @@ export class ProjectService {
     await ProjectMember.deleteMany({ projectId });
     await ActivityLog.deleteMany({ projectId });
     await Project.findByIdAndDelete(projectId);
+
+    await cacheDelPattern('projects:*');
+    await cacheDelPattern('dashboard:*');
 
     return { message: 'Project and all associated data permanently removed.' };
   }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useDateFilterStore } from './store/dateFilterStore';
@@ -9,16 +9,25 @@ import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun,
 
 import { Login } from './pages/Login';
 import { ChangePasswordModal } from './pages/ChangePasswordModal';
-import { UsersPage } from './pages/Users';
-import { ProjectsPage } from './pages/Projects';
-import { ProjectDetailPage } from './pages/ProjectDetail';
-import { MyTasksPage } from './pages/MyTasks';
-import { DashboardPage } from './pages/Dashboard';
-import { WorkActivitiesPage } from './pages/WorkActivities';
-import { GlobalSearchPage } from './pages/GlobalSearch';
-import { StudentProfilePage } from './pages/StudentProfile';
-import { MyAccountPage } from './pages/MyAccount';
-import { CategoryManagerModal } from './components/UI/CategoryManagerModal';
+// Heavy page components — loaded on demand to reduce initial bundle size
+const UsersPage = lazy(() => import('./pages/Users').then((m) => ({ default: m.UsersPage })));
+const ProjectsPage = lazy(() => import('./pages/Projects').then((m) => ({ default: m.ProjectsPage })));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetail').then((m) => ({ default: m.ProjectDetailPage })));
+const MyTasksPage = lazy(() => import('./pages/MyTasks').then((m) => ({ default: m.MyTasksPage })));
+const DashboardPage = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.DashboardPage })));
+const WorkActivitiesPage = lazy(() => import('./pages/WorkActivities').then((m) => ({ default: m.WorkActivitiesPage })));
+const GlobalSearchPage = lazy(() => import('./pages/GlobalSearch').then((m) => ({ default: m.GlobalSearchPage })));
+const StudentProfilePage = lazy(() => import('./pages/StudentProfile').then((m) => ({ default: m.StudentProfilePage })));
+const MyAccountPage = lazy(() => import('./pages/MyAccount').then((m) => ({ default: m.MyAccountPage })));
+const CategoryManagerModal = lazy(() => import('./components/UI/CategoryManagerModal').then((m) => ({ default: m.CategoryManagerModal })));
+
+/** Lightweight fallback while lazy-loaded pages initialize */
+const PageLoader: React.FC = () => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '240px', color: 'var(--text-secondary)', gap: '10px', fontSize: '0.9rem', fontWeight: 600 }}>
+    <Layers className="animate-spin" size={20} color="var(--primary)" />
+    Loading...
+  </div>
+);
 
 type TabType = 'dashboard' | 'projects' | 'activities' | 'search' | 'tasks' | 'users' | 'students' | 'account';
 
@@ -256,6 +265,15 @@ export const App: React.FC = () => {
     try {
       const data = await apiFetch<any[]>('/notifications');
       setNotifications(data);
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await apiFetch('/notifications/read-all', { method: 'PATCH' });
+      fetchNotifications();
     } catch {
       // Ignore
     }
@@ -886,10 +904,35 @@ export const App: React.FC = () => {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--border-color)' }}>
-                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>Notifications</h4>
-                      <button onClick={() => setIsNotifOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                        <X size={16} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Notifications</h4>
+                        {unreadCount > 0 && (
+                          <span style={{ fontSize: '0.72rem', backgroundColor: 'var(--primary)', color: 'white', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={handleMarkAllRead}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--primary)',
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                              padding: 0,
+                            }}
+                          >
+                            Mark all as read
+                          </button>
+                        )}
+                        <button onClick={() => setIsNotifOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                          <X size={16} />
+                        </button>
+                      </div>
                     </div>
 
                     {notifications.length === 0 ? (
@@ -897,7 +940,16 @@ export const App: React.FC = () => {
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
                         {notifications.map((n) => (
-                          <div key={n.id} style={{ fontSize: '0.82rem', padding: '8px 10px', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)' }}>
+                          <div
+                            key={n.id}
+                            style={{
+                              fontSize: '0.82rem',
+                              padding: '8px 10px',
+                              borderRadius: 'var(--radius-sm)',
+                              backgroundColor: n.isRead ? 'var(--bg-main)' : 'rgba(59, 130, 246, 0.08)',
+                              border: `1px solid ${n.isRead ? 'var(--border-color)' : 'rgba(59, 130, 246, 0.3)'}`,
+                            }}
+                          >
                             <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{n.title}</div>
                             <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{n.message}</div>
                           </div>
@@ -933,44 +985,48 @@ export const App: React.FC = () => {
 
           {/* Page Content Workspace */}
           <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-main)' }}>
-            {activeTab === 'dashboard' && <DashboardPage />}
-            {activeTab === 'projects' && !selectedProjectId && (
-              <ProjectsPage
-                onSelectProject={(id) => navigateTo('projects', id)}
-                onToggleFullScreenForm={setIsFullScreenFormActive}
-                onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
-              />
-            )}
-            {activeTab === 'projects' && selectedProjectId && (
-              <ProjectDetailPage
-                projectId={selectedProjectId}
-                onBack={() => navigateTo('projects', null)}
-                onToggleFullScreenForm={setIsFullScreenFormActive}
-              />
-            )}
-            {activeTab === 'students' && selectedStudentId && (
-              <StudentProfilePage userId={selectedStudentId} onBack={() => navigateTo('users')} onSelectProject={(id) => navigateTo('projects', id)} />
-            )}
-            {activeTab === 'activities' && <WorkActivitiesPage />}
-            {activeTab === 'search' && <GlobalSearchPage initialQuery={navSearchQuery} />}
-            {activeTab === 'users' && user.role === 'ADMIN' && (
-              <UsersPage
-                onSelectStudent={(id) => navigateTo('students', id)}
-                onToggleFullScreenForm={setIsFullScreenFormActive}
-              />
-            )}
-            {activeTab === 'tasks' && (
-              <MyTasksPage onSelectProject={(id) => navigateTo('projects', id)} />
-            )}
-            {activeTab === 'account' && (
-              <MyAccountPage onOpenChangePassword={() => setIsChangePassOpen(true)} />
-            )}
+            <Suspense fallback={<PageLoader />}>
+              {activeTab === 'dashboard' && <DashboardPage />}
+              {activeTab === 'projects' && !selectedProjectId && (
+                <ProjectsPage
+                  onSelectProject={(id) => navigateTo('projects', id)}
+                  onToggleFullScreenForm={setIsFullScreenFormActive}
+                  onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
+                />
+              )}
+              {activeTab === 'projects' && selectedProjectId && (
+                <ProjectDetailPage
+                  projectId={selectedProjectId}
+                  onBack={() => navigateTo('projects', null)}
+                  onToggleFullScreenForm={setIsFullScreenFormActive}
+                />
+              )}
+              {activeTab === 'students' && selectedStudentId && (
+                <StudentProfilePage userId={selectedStudentId} onBack={() => navigateTo('users')} onSelectProject={(id) => navigateTo('projects', id)} />
+              )}
+              {activeTab === 'activities' && <WorkActivitiesPage />}
+              {activeTab === 'search' && <GlobalSearchPage initialQuery={navSearchQuery} />}
+              {activeTab === 'users' && user.role === 'ADMIN' && (
+                <UsersPage
+                  onSelectStudent={(id) => navigateTo('students', id)}
+                  onToggleFullScreenForm={setIsFullScreenFormActive}
+                />
+              )}
+              {activeTab === 'tasks' && (
+                <MyTasksPage onSelectProject={(id) => navigateTo('projects', id)} />
+              )}
+              {activeTab === 'account' && (
+                <MyAccountPage onOpenChangePassword={() => setIsChangePassOpen(true)} />
+              )}
+            </Suspense>
           </main>
         </div>
       </div>
 
       {isCategoryModalOpen && (
-        <CategoryManagerModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} />
+        <Suspense fallback={null}>
+          <CategoryManagerModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} />
+        </Suspense>
       )}
     </ToastProvider>
   );

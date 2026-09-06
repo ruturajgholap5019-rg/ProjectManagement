@@ -74,8 +74,23 @@ export class UserController {
 
   static async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const result = await UserService.resetPassword(req.params.id, req.body.tempPassword);
+      // Frontend sends { newPassword } — support both newPassword and legacy tempPassword field
+      const password = req.body.newPassword || req.body.tempPassword;
+      const result = await UserService.resetPassword(req.params.id, password);
       sendSuccess(res, result, 'User password reset successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async setStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { isActive, projectId } = req.body;
+      if (typeof isActive !== 'boolean') {
+        throw new AppError('isActive must be a boolean', 400);
+      }
+      const updated = await UserService.setUserActiveStatus(req.params.id, isActive, projectId);
+      sendSuccess(res, updated, isActive ? 'User activated successfully' : 'User deactivated successfully');
     } catch (error) {
       next(error);
     }

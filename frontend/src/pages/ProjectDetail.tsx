@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { useToast } from '../context/ToastContext';
 import { useCategoryFilterStore } from '../store/categoryFilterStore';
 import { Button } from '../components/UI/Button';
 import { Select, TextArea, Input } from '../components/UI/Input';
@@ -18,6 +19,7 @@ interface ProjectDetailProps {
 
 export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onBack, onToggleFullScreenForm }) => {
   const user = useAuthStore((state) => state.user);
+  const { showToast } = useToast();
   const { categories } = useCategoryFilterStore();
 
   const [project, setProject] = useState<any>(null);
@@ -88,9 +90,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       });
 
       setIsEditProjectOpen(false);
+      showToast('Project details updated successfully', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to update project details');
+      showToast(err.message || 'Failed to update project details', 'error');
     } finally {
       setIsSavingProject(false);
     }
@@ -124,7 +127,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     setTaskAssignees((prev) => {
       if (prev.includes(userId)) return prev.filter((id) => id !== userId);
       if (prev.length >= 2) {
-        alert("A task can have a maximum of 2 assignees.");
+        showToast('A task can have a maximum of 2 assignees.', 'warning');
         return prev;
       }
       return [...prev, userId];
@@ -254,7 +257,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
   const handleStatusUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (['AT_RISK', 'ON_HOLD', 'CANCELLED'].includes(newStatus) && !statusReason.trim()) {
-      alert(`Reason for status change is required when setting status to ${newStatus.replace('_', ' ')}.`);
+      showToast(`Reason for status change is required when setting status to ${newStatus.replace('_', ' ')}.`, 'warning');
       return;
     }
 
@@ -264,10 +267,11 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
         body: JSON.stringify({ status: newStatus, statusReason: statusReason.trim() || undefined }),
       });
 
+      showToast('Project status updated', 'success');
       setIsStatusOpen(false);
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to update status');
+      showToast(err.message || 'Failed to update status', 'error');
     }
   };
 
@@ -277,9 +281,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus }),
       });
+      showToast('Task status updated', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to update task status');
+      showToast(err.message || 'Failed to update task status', 'error');
     }
   };
 
@@ -290,7 +295,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       setIsAddMemberOpen(true);
       if (onToggleFullScreenForm) onToggleFullScreenForm(true);
     } catch {
-      alert('Failed to load user list');
+      showToast('Failed to load user list', 'error');
     }
   };
 
@@ -305,11 +310,12 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
         body: JSON.stringify({ userId: selectedUserId }),
       });
 
+      showToast('Member added to project', 'success');
       closeAddMemberModal();
       setSelectedUserId('');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to add member');
+      showToast(err.message || 'Failed to add member', 'error');
     } finally {
       setIsAddingMember(false);
     }
@@ -325,9 +331,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       await apiFetch(`/projects/${projectId}/members/${targetUserId}`, {
         method: 'DELETE',
       });
+      showToast('Member removed from project', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to remove member');
+      showToast(err.message || 'Failed to remove member', 'error');
       fetchProjectDetails();
     }
   };
@@ -336,10 +343,11 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     setIsDeletingProject(true);
     try {
       await apiFetch(`/projects/${projectId}`, { method: 'DELETE' });
+      showToast('Project deleted', 'success');
       setIsDeleteConfirmOpen(false);
       onBack();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete project');
+      showToast(err.message || 'Failed to delete project', 'error');
     } finally {
       setIsDeletingProject(false);
     }
@@ -358,9 +366,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       closeMilestoneModal();
       setMilestoneName('');
       setMilestoneDesc('');
+      showToast('Milestone created successfully', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to create milestone');
+      showToast(err.message || 'Failed to create milestone', 'error');
     } finally {
       setIsCreatingMilestone(false);
     }
@@ -388,9 +397,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       setTaskDesc('');
       setTaskAssignee('');
       setTaskAssignees([]);
+      showToast('Task created successfully', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to create task');
+      showToast(err.message || 'Failed to create task', 'error');
     } finally {
       setIsCreatingTask(false);
     }
@@ -400,9 +410,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     if (!window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) return;
     try {
       await apiFetch(`/tasks/${taskId}`, { method: 'DELETE' });
+      showToast('Task deleted successfully', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete task');
+      showToast(err.message || 'Failed to delete task', 'error');
     }
   };
 
@@ -410,9 +421,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
     if (!window.confirm('Are you sure you want to delete this milestone? Associated tasks will be unlinked.')) return;
     try {
       await apiFetch(`/milestones/${msId}`, { method: 'DELETE' });
+      showToast('Milestone deleted successfully', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete milestone');
+      showToast(err.message || 'Failed to delete milestone', 'error');
     }
   };
 
@@ -427,9 +439,10 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
         body: JSON.stringify({ projectId, content: newComment }),
       });
       setNewComment('');
+      showToast('Comment posted', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'Failed to post comment');
+      showToast(err.message || 'Failed to post comment', 'error');
     } finally {
       setIsPostingComment(false);
     }
@@ -458,17 +471,14 @@ export const ProjectDetailPage: React.FC<ProjectDetailProps> = ({ projectId, onB
       }
 
       setSelectedFile(null);
+      showToast('File uploaded successfully', 'success');
       fetchProjectDetails();
     } catch (err: any) {
-      alert(err.message || 'File upload failed');
+      showToast(err.message || 'File upload failed', 'error');
     } finally {
       setIsUploading(false);
     }
   };
-
-  if (isLoading) {
-    return <div style={{ padding: '36px' }}>Loading project details...</div>;
-  }
 
   if (isEditProjectOpen) {
     return (

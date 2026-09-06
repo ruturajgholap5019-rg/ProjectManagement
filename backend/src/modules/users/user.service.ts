@@ -43,7 +43,6 @@ export class UserService {
     const user = await User.create({
       email: normalizedEmail,
       passwordHash,
-      rawPassword: tempPassword,
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
       role: input.role || UserRole.TEAM_MEMBER,
@@ -173,7 +172,6 @@ export class UserService {
       return {
         id: u._id,
         email: u.email,
-        rawPassword: u.rawPassword,
         firstName: u.firstName,
         lastName: u.lastName,
         role: u.role,
@@ -237,7 +235,6 @@ export class UserService {
     return {
       id: (user as any)._id,
       email: (user as any).email,
-      rawPassword: (user as any).rawPassword,
       firstName: (user as any).firstName,
       lastName: (user as any).lastName,
       role: (user as any).role,
@@ -297,13 +294,11 @@ export class UserService {
     if (data.role !== undefined) existing.role = data.role;
     if (data.memberType !== undefined) existing.memberType = data.memberType;
 
-    if (data.password || data.tempPassword || data.rawPassword) {
-      const pass = (data.password || data.tempPassword || data.rawPassword).trim();
-      if (pass) {
-        existing.passwordHash = await bcrypt.hash(pass, 12);
-        existing.rawPassword = pass;
-        existing.mustChangePassword = false;
-      }
+    // Admin can set a new password for a user — stored ONLY as bcrypt hash, never plaintext
+    const newPass = (data.newPassword || data.password || data.tempPassword)?.trim();
+    if (newPass) {
+      existing.passwordHash = await bcrypt.hash(newPass, 12);
+      existing.mustChangePassword = false;
     }
 
     await existing.save();
@@ -341,7 +336,6 @@ export class UserService {
     return {
       id: existing._id,
       email: existing.email,
-      rawPassword: existing.rawPassword,
       firstName: existing.firstName,
       lastName: existing.lastName,
       role: existing.role,
@@ -464,7 +458,6 @@ export class UserService {
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
     user.passwordHash = passwordHash;
-    user.rawPassword = tempPassword;
     user.mustChangePassword = true;
     await user.save();
 

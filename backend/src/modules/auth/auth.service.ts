@@ -68,7 +68,6 @@ export class AuthService {
         githubUrl: user.githubUrl,
         youtubeUrl: user.youtubeUrl,
         facebookUrl: user.facebookUrl,
-        rawPassword: user.role === 'ADMIN' ? user.rawPassword : undefined,
         mustChangePassword: user.mustChangePassword,
       },
       ...tokens,
@@ -109,7 +108,6 @@ export class AuthService {
           githubUrl: user.githubUrl,
           youtubeUrl: user.youtubeUrl,
           facebookUrl: user.facebookUrl,
-          rawPassword: user.role === 'ADMIN' ? user.rawPassword : undefined,
           mustChangePassword: user.mustChangePassword,
         },
       };
@@ -133,7 +131,6 @@ export class AuthService {
 
     const newHash = await bcrypt.hash(newPass, 12);
     user.passwordHash = newHash;
-    user.rawPassword = newPass;
     user.mustChangePassword = false;
     await user.save();
 

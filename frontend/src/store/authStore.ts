@@ -15,7 +15,6 @@ export interface User {
   githubUrl?: string;
   youtubeUrl?: string;
   facebookUrl?: string;
-  rawPassword?: string;
   mustChangePassword?: boolean;
 }
 

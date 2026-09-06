@@ -95,10 +95,6 @@ export class AuthController {
         createdAt: (user as any).createdAt,
       };
 
-      if (req.user.role === 'ADMIN') {
-        safeUser.rawPassword = (user as any).rawPassword;
-      }
-
       sendSuccess(res, safeUser, 'Current user profile fetched');
     } catch (error) {
       next(error);

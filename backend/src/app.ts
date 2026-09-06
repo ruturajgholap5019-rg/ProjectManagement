@@ -33,7 +33,20 @@ app.use(
 );
 app.use(
   cors({
-    origin: (origin, callback) => callback(null, true),
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, server-to-server)
+      if (!origin) return callback(null, true);
+      // In development or when CORS_ORIGIN is *, allow all
+      if (env.NODE_ENV !== 'production' || env.CORS_ORIGIN === '*') {
+        return callback(null, true);
+      }
+      // In production, validate against the explicit allowlist
+      const allowed = env.CORS_ORIGIN.split(',').map((o) => o.trim());
+      if (allowed.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS: Origin '${origin}' not allowed`), false);
+    },
     credentials: true,
   })
 );

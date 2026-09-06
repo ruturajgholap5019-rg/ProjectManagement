@@ -3,7 +3,7 @@ import { ProjectController } from './project.controller.js';
 import { ProjectMemberController } from './projectMember.controller.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
 import { requireRoles } from '../../middlewares/rbac.middleware.js';
-import { requireProjectAccess } from '../../middlewares/projectAccess.middleware.js';
+import { requireProjectAccess, requireProjectLead } from '../../middlewares/projectAccess.middleware.js';
 import { validateRequest } from '../../middlewares/validation.middleware.js';
 import { createProjectSchema, updateProjectSchema, updateProjectStatusSchema } from './project.validation.js';
 import { UserRole } from '../../types/enums.js';
@@ -29,7 +29,7 @@ router.get('/:id', requireProjectAccess('id'), ProjectController.getProject);
 // Update project details (Lead / Admin)
 router.put(
   '/:id',
-  requireProjectAccess('id'),
+  requireProjectLead('id'),
   validateRequest(updateProjectSchema),
   ProjectController.updateProject
 );
@@ -37,7 +37,7 @@ router.put(
 // Update project status with statusReason validation (Lead / Admin)
 router.patch(
   '/:id/status',
-  requireProjectAccess('id'),
+  requireProjectLead('id'),
   validateRequest(updateProjectStatusSchema),
   ProjectController.updateStatus
 );
@@ -53,7 +53,7 @@ router.delete(
 // PROJECT MEMBER ENDPOINTS
 // ----------------------------------------------------------------------------
 router.get('/:id/members', requireProjectAccess('id'), ProjectMemberController.listMembers);
-router.post('/:id/members', requireProjectAccess('id'), ProjectMemberController.addMember);
-router.delete('/:id/members/:userId', requireProjectAccess('id'), ProjectMemberController.removeMember);
+router.post('/:id/members', requireProjectLead('id'), ProjectMemberController.addMember);
+router.delete('/:id/members/:userId', requireProjectLead('id'), ProjectMemberController.removeMember);
 
 export default router;

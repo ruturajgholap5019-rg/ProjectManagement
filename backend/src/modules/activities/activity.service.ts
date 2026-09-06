@@ -1,5 +1,6 @@
 import { WorkActivity, Project, User } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
+import { escapeRegex } from '../../utils/sanitize.js';
 
 export interface CreateActivityInput {
   userId: string;
@@ -54,6 +55,9 @@ export class ActivityService {
     startDate?: string;
     endDate?: string;
     search?: string;
+    page?: number;
+    limit?: number;
+    isExport?: boolean;
   }) {
     const query: any = {};
 
@@ -82,10 +86,28 @@ export class ActivityService {
     }
 
     if (filters.search) {
-      query.workDescription = new RegExp(filters.search, 'i');
+      const safe = escapeRegex(filters.search.trim().slice(0, 50));
+      query.workDescription = new RegExp(safe, 'i');
     }
 
-    const activities = await WorkActivity.find(query).sort({ dateTime: -1 }).lean();
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = filters.limit ? Math.min(100, Math.max(1, Number(filters.limit))) : (filters.isExport ? 1000 : 25);
+    const skip = (page - 1) * limit;
+
+    const [totalCount, totalHoursAgg, activities] = await Promise.all([
+      WorkActivity.countDocuments(query),
+      WorkActivity.aggregate([
+        { $match: query },
+        { $group: { _id: null, total: { $sum: '$hoursSpent' } } },
+      ]),
+      WorkActivity.find(query)
+        .sort({ dateTime: -1 })
+        .skip(filters.isExport ? 0 : skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const totalHours = totalHoursAgg.length > 0 ? (totalHoursAgg[0].total || 0) : 0;
 
     const userIds = [
       ...new Set([
@@ -111,17 +133,19 @@ export class ActivityService {
       assignedBy: a.assignedById ? userMap.get(a.assignedById) || null : null,
     }));
 
-    const totalHours = formatted.reduce((acc: number, a: any) => acc + (a.hoursSpent || 0), 0);
-
     return {
       activities: formatted,
       totalHours,
-      count: formatted.length,
+      count: totalCount,
+      total: totalCount,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCount / limit),
     };
   }
 
   static async exportToCSV(filters: any) {
-    const { activities, totalHours } = await this.listActivities(filters);
+    const { activities, totalHours } = await this.listActivities({ ...filters, isExport: true });
 
     let csv = '\uFEFF';
     csv += 'DIGITAL PROJECT TRACKER — WORK ACTIVITY LOG REPORT\n';

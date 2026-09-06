@@ -75,6 +75,9 @@ TaskSchema.virtual('id').get(function (this: any) {
   return this._id;
 });
 
-TaskSchema.index({ projectId: 1, status: 1 });
+TaskSchema.index({ projectId: 1, status: 1 });      // Task list by project+status (most common query)
+TaskSchema.index({ assigneeId: 1, status: 1 });     // My tasks by assignee+status
+TaskSchema.index({ dueDate: 1, status: 1 });         // Overdue tasks filter
+TaskSchema.index({ parentTaskId: 1 });               // Subtask lookup
 
 export const Task = mongoose.models.Task || mongoose.model<ITask>('Task', TaskSchema, 'tasks');

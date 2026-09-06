@@ -1,27 +1,76 @@
 import { Project, User, Task, ActivityLog, WorkActivity, ProjectMember } from '../../models/index.js';
 import { cacheGet, cacheSet } from '../../config/redis.js';
 
+type DashboardFilters = {
+  category?: string;
+  period?: string;
+  startDate?: string;
+  endDate?: string;
+};
+
+/** Build a MongoDB date range filter from period / explicit startDate+endDate */
+function buildDateFilter(filters: DashboardFilters): { start?: Date; end?: Date } {
+  if (filters.startDate || filters.endDate) {
+    return {
+      start: filters.startDate ? new Date(filters.startDate) : undefined,
+      end: filters.endDate ? new Date(filters.endDate) : undefined,
+    };
+  }
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (filters.period) {
+    case 'today':
+      return { start: today, end: now };
+    case 'yesterday': {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return { start: yesterday, end: today };
+    }
+    case 'week': {
+      const weekStart = new Date(today);
+      weekStart.setDate(weekStart.getDate() - 7);
+      return { start: weekStart, end: now };
+    }
+    case 'month': {
+      const monthStart = new Date(today);
+      monthStart.setMonth(monthStart.getMonth() - 1);
+      return { start: monthStart, end: now };
+    }
+    case 'year': {
+      const yearStart = new Date(today);
+      yearStart.setFullYear(yearStart.getFullYear() - 1);
+      return { start: yearStart, end: now };
+    }
+    default:
+      return {};
+  }
+}
+
 export class DashboardService {
-  static async getDashboard(user: { id: string; role: string }, filters?: { category?: string }) {
-    const cacheKey = `dashboard:${user.role}:${user.id}:${filters?.category || 'all'}`;
+  static async getDashboard(user: { id: string; role: string }, filters?: DashboardFilters) {
+    const dateKey = filters?.period || (filters?.startDate ? `${filters.startDate}_${filters.endDate}` : 'all');
+    const cacheKey = `dashboard:${user.role}:${user.id}:${filters?.category || 'all'}:${dateKey}`;
     const cached = await cacheGet(cacheKey);
     if (cached) return cached;
 
+    const dateRange = buildDateFilter(filters || {});
     let result;
     const pWhere = filters?.category ? { projectType: filters.category } : {};
     if (user.role === 'ADMIN') {
-      result = await this.getAdminDashboard(pWhere);
+      result = await this.getAdminDashboard(pWhere, dateRange);
     } else if (user.role === 'PROJECT_LEAD') {
-      result = await this.getLeadDashboard(user.id, pWhere);
+      result = await this.getLeadDashboard(user.id, pWhere, dateRange);
     } else {
-      result = await this.getMemberDashboard(user.id, pWhere);
+      result = await this.getMemberDashboard(user.id, pWhere, dateRange);
     }
 
-    await cacheSet(cacheKey, result, 600);
+    await cacheSet(cacheKey, result, 300); // 5-min TTL (reduced from 600 for fresher data)
     return result;
   }
 
-  private static async getAdminDashboard(pWhere: any = {}) {
+  private static async getAdminDashboard(pWhere: any = {}, dateRange: { start?: Date; end?: Date } = {}) {
     let taskFilter: any = { status: { $in: ['TODO', 'IN_PROGRESS', 'REVIEW', 'REVISION'] } };
     if (pWhere.projectType) {
       const categoryProjects = await Project.find({ projectType: pWhere.projectType }, '_id').lean();
@@ -82,7 +131,13 @@ export class DashboardService {
       };
     });
 
-    const recentActivitiesDocs = await ActivityLog.find().sort({ createdAt: -1 }).limit(6).lean();
+    const activityQuery: any = {};
+    if (dateRange.start || dateRange.end) {
+      activityQuery.createdAt = {};
+      if (dateRange.start) activityQuery.createdAt.$gte = dateRange.start;
+      if (dateRange.end) activityQuery.createdAt.$lte = dateRange.end;
+    }
+    const recentActivitiesDocs = await ActivityLog.find(activityQuery).sort({ createdAt: -1 }).limit(6).lean();
     const actUserIds = recentActivitiesDocs.map((a: any) => a.userId).filter(Boolean);
     const actProjectIds = recentActivitiesDocs.map((a: any) => a.projectId).filter(Boolean);
 
@@ -110,7 +165,7 @@ export class DashboardService {
     };
   }
 
-  private static async getLeadDashboard(leadId: string, pWhere: any = {}) {
+  private static async getLeadDashboard(leadId: string, pWhere: any = {}, _dateRange: { start?: Date; end?: Date } = {}) {
     const myProjectsDocs = await Project.find({ leadId, ...pWhere }, 'name status statusReason _id').lean();
     const projectIds = myProjectsDocs.map((p: any) => p._id);
 
@@ -147,7 +202,7 @@ export class DashboardService {
     };
   }
 
-  private static async getMemberDashboard(memberId: string, pWhere: any = {}) {
+  private static async getMemberDashboard(memberId: string, pWhere: any = {}, dateRange: { start?: Date; end?: Date } = {}) {
     const userMemberships = await ProjectMember.find({ userId: memberId }, 'projectId').lean();
     const memberProjectIds = userMemberships.map((m: any) => m.projectId);
 

@@ -48,6 +48,7 @@ ActivityLogSchema.virtual('id').get(function (this: any) {
 
 ActivityLogSchema.index({ projectId: 1, createdAt: -1 });
 ActivityLogSchema.index({ taskId: 1, createdAt: -1 });
+ActivityLogSchema.index({ userId: 1, createdAt: -1 });  // Dashboard recent activities by user
 
 export const ActivityLog =
   mongoose.models.ActivityLog || mongoose.model<IActivityLog>('ActivityLog', ActivityLogSchema, 'activity_logs');

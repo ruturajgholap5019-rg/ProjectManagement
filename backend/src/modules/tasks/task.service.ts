@@ -10,6 +10,8 @@ import {
 } from '../../models/index.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { TaskStatus, Priority, UserRole } from '../../types/enums.js';
+import { cacheDelPattern } from '../../config/redis.js';
+import { escapeRegex } from '../../utils/sanitize.js';
 
 export interface CreateTaskInput {
   projectId: string;
@@ -96,6 +98,9 @@ export class TaskService {
       }
     }
 
+    await cacheDelPattern('projects:*');
+    await cacheDelPattern('dashboard:*');
+
     return {
       ...task.toJSON(),
       id: task._id,
@@ -112,9 +117,13 @@ export class TaskService {
     if (filters.assigneeId) query.assigneeId = filters.assigneeId;
     if (filters.status) query.status = filters.status;
     if (filters.milestoneId) query.milestoneId = filters.milestoneId;
-    if (filters.search) query.title = new RegExp(filters.search, 'i');
+    if (filters.search) {
+      const safe = escapeRegex(filters.search.trim().slice(0, 50));
+      query.title = new RegExp(safe, 'i');
+    }
 
-    const tasks = await Task.find(query).sort({ dueDate: 1, createdAt: -1 }).lean();
+    // Apply safe limit to prevent unbounded task queries
+    const tasks = await Task.find(query).sort({ dueDate: 1, createdAt: -1 }).limit(500).lean();
     const taskIds = tasks.map((t: any) => t._id);
 
     const userIds = [
@@ -191,7 +200,8 @@ export class TaskService {
       };
     }
 
-    const tasks = await Task.find(query).sort({ dueDate: 1, createdAt: -1 }).lean();
+    // Apply safe limit — getMyTasks is used for the tasks page which shows a user's personal workload
+    const tasks = await Task.find(query).sort({ dueDate: 1, createdAt: -1 }).limit(500).lean();
 
     const projectIds = [...new Set(tasks.map((t: any) => t.projectId))];
     const milestoneIds = [...new Set(tasks.map((t: any) => t.milestoneId).filter(Boolean))];
@@ -334,6 +344,9 @@ export class TaskService {
       details: { previousStatus, newStatus },
     });
 
+    await cacheDelPattern('projects:*');
+    await cacheDelPattern('dashboard:*');
+
     return this.getTaskById(taskId);
   }
 
@@ -435,6 +448,9 @@ export class TaskService {
         }
       }
     }
+
+    await cacheDelPattern('projects:*');
+    await cacheDelPattern('dashboard:*');
 
     return this.getTaskById(taskId);
   }
@@ -545,6 +561,9 @@ export class TaskService {
     await Comment.deleteMany({ taskId: { $in: allTaskIdsToDelete } });
     await ActivityLog.deleteMany({ taskId: { $in: allTaskIdsToDelete } });
     await Task.deleteMany({ _id: { $in: allTaskIdsToDelete } });
+
+    await cacheDelPattern('projects:*');
+    await cacheDelPattern('dashboard:*');
 
     return { message: 'Task deleted successfully' };
   }

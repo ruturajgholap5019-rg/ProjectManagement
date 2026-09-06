@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { TaskController } from './task.controller.js';
 import { MilestoneController } from '../milestones/milestone.controller.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
+import { requireProjectAccess, requireProjectLead } from '../../middlewares/projectAccess.middleware.js';
 import { validateRequest } from '../../middlewares/validation.middleware.js';
 import {
   createTaskSchema,
@@ -32,10 +33,10 @@ router.patch('/tasks/:id/block', validateRequest(toggleBlockerSchema), TaskContr
 router.put('/milestones/:id', validateRequest(updateMilestoneSchema), MilestoneController.updateMilestone);
 router.delete('/milestones/:id', MilestoneController.deleteMilestone);
 
-// Project-Scoped Milestones & Tasks Endpoints
-router.get('/projects/:id/milestones', MilestoneController.listMilestones);
-router.post('/projects/:id/milestones', validateRequest(createMilestoneSchema), MilestoneController.createMilestone);
-router.get('/projects/:id/tasks', TaskController.listTasks);
-router.post('/projects/:id/tasks', validateRequest(createTaskSchema), TaskController.createTask);
+// Project-Scoped Milestones & Tasks Endpoints (Protected by Project Access)
+router.get('/projects/:id/milestones', requireProjectAccess('id'), MilestoneController.listMilestones);
+router.post('/projects/:id/milestones', requireProjectLead('id'), validateRequest(createMilestoneSchema), MilestoneController.createMilestone);
+router.get('/projects/:id/tasks', requireProjectAccess('id'), TaskController.listTasks);
+router.post('/projects/:id/tasks', requireProjectAccess('id'), validateRequest(createTaskSchema), TaskController.createTask);
 
 export default router;

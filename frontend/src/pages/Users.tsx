@@ -8,7 +8,8 @@ import { ConfirmModal } from '../components/UI/ConfirmModal';
 import { Badge } from '../components/UI/Badge';
 import { StudentProfilePage } from './StudentProfile';
 import { isValidPhone, isValidEmail } from '../utils/validation';
-import { UserPlus, UserCheck, UserX, Edit2, Trash2, Users as UsersIcon, Sparkles, Shuffle, Copy, Check, LayoutDashboard, ArrowLeft, Eye, EyeOff, X, Plus, ChevronDown, Building } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { UserPlus, UserCheck, UserX, Edit2, Trash2, Users as UsersIcon, Sparkles, Shuffle, Copy, Check, LayoutDashboard, ArrowLeft, X, Plus, ChevronDown, Building } from 'lucide-react';
 
 interface UserItem {
   id: string;
@@ -21,7 +22,6 @@ interface UserItem {
   skills?: { id: string; skillName: string }[];
   projectMemberships?: { project: { id: string; name: string; projectType?: string } }[];
   isActive: boolean;
-  rawPassword?: string;
   createdAt: string;
 }
 
@@ -71,11 +71,17 @@ interface UsersPageProps {
 }
 
 export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleFullScreenForm }) => {
+  const { showToast } = useToast();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchDebounce, setSearchDebounce] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const PAGE_SIZE = 25;
 
   // Form View State
   const [isDedicatedFormPage, setIsDedicatedFormPage] = useState(false);
@@ -117,7 +123,6 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
   // Password Management Modal State (View & Change Password Together)
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [newResetPassword, setNewResetPassword] = useState('');
-  const [isResetPassVisible, setIsResetPassVisible] = useState(false);
   const [selectedViewUserId, setSelectedViewUserId] = useState<string | null>(null);
 
   // Client Management State
@@ -132,13 +137,33 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
   const [cProjectId, setCProjectId] = useState('');
   const [isSavingClient, setIsSavingClient] = useState(false);
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (page = currentPage) => {
     if (users.length === 0) {
       setIsLoading(true);
     }
     try {
-      const data = await apiFetch<UserItem[]>('/users');
-      setUsers(data);
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('limit', String(PAGE_SIZE));
+      if (filterRole !== 'ALL') params.set('role', filterRole);
+      if (searchDebounce.trim()) params.set('search', searchDebounce.trim());
+
+      const res = await apiFetch<UserItem[]>(`/users?${params.toString()}`);
+      // Backend returns { users, meta } when paginated
+      const data: any = res;
+      if (Array.isArray(data)) {
+        setUsers(data);
+        setTotalPages(1);
+        setTotalUsers(data.length);
+      } else if (data && Array.isArray(data.users)) {
+        // If apiFetch returns the data.data layer already stripped by the cache wrapper,
+        // the shape might be UserItem[] directly or wrapped
+        setUsers(data.users ?? data);
+        setTotalPages(data.meta?.totalPages ?? 1);
+        setTotalUsers(data.meta?.total ?? (data.users ?? data).length);
+      } else {
+        setUsers([]);
+      }
     } catch (err: any) {
       console.error('Failed to fetch users:', err);
     } finally {
@@ -164,8 +189,22 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
     }
   };
 
+  // Debounce search input — only re-fetch after 400ms pause
   useEffect(() => {
-    fetchUsers();
+    const timer = setTimeout(() => setSearchDebounce(searchTerm), 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchUsers(1);
+  }, [filterRole, searchDebounce]);
+
+  useEffect(() => {
+    fetchUsers(currentPage);
+  }, [currentPage]);
+
+  useEffect(() => {
     fetchProjects();
     fetchClients();
   }, []);
@@ -245,7 +284,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
     if (isSavingUser) return;
 
     if (!isValidEmail(email)) {
-      alert('Please enter a valid email address.');
+      showToast('Please enter a valid email address.', 'warning');
       return;
     }
 
@@ -267,7 +306,6 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
             lastName,
             email,
             phone: phone.trim() || undefined,
-            rawPassword: tempPassword.trim() || undefined,
             skills: skillsString,
             projectId: formProjectId || undefined,
           }),
@@ -332,7 +370,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
       closeForm();
       fetchUsers();
     } catch (err: any) {
-      alert(err.message || 'Failed to save account details.');
+      showToast(err.message || 'Failed to save account details.', 'error');
     } finally {
       setIsSavingUser(false);
     }
@@ -368,7 +406,7 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
 
       fetchUsers();
     } catch (err: any) {
-      alert(err.message || 'Failed to change account status.');
+      showToast(err.message || 'Failed to change account status.', 'error');
       fetchUsers(); // Rollback on error
     }
   };
@@ -391,9 +429,10 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
       await apiFetch(`/users/${targetId}`, {
         method: 'DELETE',
       });
+      showToast('Account deleted successfully.', 'success');
       fetchUsers();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete account.');
+      showToast(err.message || 'Failed to delete account.', 'error');
       fetchUsers(); // Rollback on error
     } finally {
       setIsDeleting(false);
@@ -409,11 +448,11 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
         method: 'POST',
         body: JSON.stringify({ newPassword: newResetPassword.trim() }),
       });
-      alert('Password updated successfully!');
+      showToast('Password updated successfully!', 'success');
       setResetUserId(null);
       fetchUsers();
     } catch (err: any) {
-      alert(err.message || 'Failed to update password.');
+      showToast(err.message || 'Failed to update password.', 'error');
     }
   };
 
@@ -471,10 +510,11 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
         });
       }
       setIsClientModalOpen(false);
+      showToast('Client saved successfully', 'success');
       fetchClients();
       fetchProjects();
     } catch (err: any) {
-      alert(err.message || 'Failed to save client details');
+      showToast(err.message || 'Failed to save client details', 'error');
     } finally {
       setIsSavingClient(false);
     }
@@ -484,9 +524,10 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
     if (!window.confirm(`Are you sure you want to delete client "${name}"?`)) return;
     try {
       await apiFetch(`/clients/${id}`, { method: 'DELETE' });
+      showToast('Client deleted successfully', 'success');
       fetchClients();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete client');
+      showToast(err.message || 'Failed to delete client', 'error');
     }
   };
 
@@ -500,24 +541,13 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
 
   const { selectedCategory } = useCategoryFilterStore();
 
+  // Category filter stays client-side (membership data is already loaded with users)
   const filteredUsers = React.useMemo(() => {
-    const lower = searchTerm.toLowerCase().trim();
-    return users.filter((u) => {
-      if (filterRole !== 'ALL' && u.role !== filterRole) return false;
-      if (selectedCategory) {
-        const hasCatProject = u.projectMemberships?.some((pm) => pm.project?.projectType === selectedCategory);
-        if (!hasCatProject) return false;
-      }
-      if (lower) {
-        const matchesSearch = 
-          u.firstName?.toLowerCase().includes(lower) || 
-          u.lastName?.toLowerCase().includes(lower) || 
-          u.email?.toLowerCase().includes(lower);
-        if (!matchesSearch) return false;
-      }
-      return true;
-    });
-  }, [users, filterRole, selectedCategory, searchTerm]);
+    if (!selectedCategory) return users;
+    return users.filter((u) =>
+      u.projectMemberships?.some((pm) => pm.project?.projectType === selectedCategory)
+    );
+  }, [users, selectedCategory]);
 
   const targetResetUser = users.find((u) => u.id === resetUserId);
 
@@ -1236,6 +1266,49 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
                 </table>
               </div>
             )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalUsers)}–{Math.min(currentPage * PAGE_SIZE, totalUsers)} of {totalUsers} members
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    ← Prev
+                  </Button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    // Show pages around current page
+                    const startPage = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+                    const pg = startPage + i;
+                    if (pg > totalPages) return null;
+                    return (
+                      <Button
+                        key={pg}
+                        size="sm"
+                        variant={pg === currentPage ? 'gradient' : 'secondary'}
+                        onClick={() => setCurrentPage(pg)}
+                      >
+                        {pg}
+                      </Button>
+                    );
+                  })}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next →
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1345,67 +1418,30 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onSelectStudent, onToggleF
         isOpen={Boolean(resetUserId)}
         onClose={() => {
           setResetUserId(null);
-          setIsResetPassVisible(false);
         }}
         title={`Password Management - ${targetResetUser ? `${targetResetUser.firstName} ${targetResetUser.lastName}` : 'User'}`}
       >
         {targetResetUser && (
           <form onSubmit={handleConfirmResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* View Original Password Section */}
+            {/* Security Notice: Passwords are hashed and cannot be viewed */}
             <div
               style={{
                 backgroundColor: 'var(--bg-main)',
                 border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)',
-                padding: '16px',
+                padding: '14px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                color: 'var(--text-secondary)',
+                fontSize: '0.84rem',
               }}
             >
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '8px' }}>
-                Current / Original Registered Password:
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <code
-                  style={{
-                    fontSize: '0.95rem',
-                    fontWeight: 700,
-                    backgroundColor: 'var(--bg-card)',
-                    padding: '6px 14px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border-color)',
-                    color: isResetPassVisible ? 'var(--primary)' : 'var(--text-muted)',
-                    letterSpacing: isResetPassVisible ? 'normal' : '0.15em',
-                    flex: 1,
-                  }}
-                >
-                  {isResetPassVisible ? (targetResetUser.rawPassword || '••••••••') : '••••••••'}
-                </code>
-
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setIsResetPassVisible(!isResetPassVisible)}
-                  title={isResetPassVisible ? 'Hide Password' : 'Show Original Password'}
-                >
-                  {isResetPassVisible ? <EyeOff size={15} /> : <Eye size={15} />}
-                  {isResetPassVisible ? 'Hide' : 'Show'}
-                </Button>
-
-                {targetResetUser.rawPassword && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      navigator.clipboard.writeText(targetResetUser.rawPassword || '');
-                      alert('Password copied to clipboard!');
-                    }}
-                    title="Copy Password"
-                  >
-                    <Copy size={15} />
-                  </Button>
-                )}
-              </div>
+              <span style={{ fontSize: '1.1rem' }}>🔒</span>
+              <span>
+                Existing passwords are stored as secure hashes and <strong>cannot be viewed</strong>.
+                Use the form below to set a new password for this user.
+              </span>
             </div>
 
             {/* Change Password Section */}

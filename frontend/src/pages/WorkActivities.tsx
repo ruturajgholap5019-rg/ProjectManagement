@@ -3,11 +3,14 @@ import { useDateFilterStore } from '../store/dateFilterStore';
 import { useCategoryFilterStore } from '../store/categoryFilterStore';
 import { apiFetch } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { useToast } from '../context/ToastContext';
 import { Button } from '../components/UI/Button';
 import { Input, Select, TextArea } from '../components/UI/Input';
 import { Modal } from '../components/UI/Modal';
 import { ConfirmModal } from '../components/UI/ConfirmModal';
-import { Download, Plus, Clock, Sparkles, FileText, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
+import { PaginationControls } from '../components/UI/PaginationControls';
+import { TableSkeleton } from '../components/UI/SkeletonLoader';
+import { Download, Plus, Clock, FileText, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
 
 interface WorkActivityItem {
   id: string;
@@ -22,12 +25,16 @@ interface WorkActivityItem {
 
 export const WorkActivitiesPage: React.FC = () => {
   const user = useAuthStore((state) => state.user);
+  const { showToast } = useToast();
   const globalFilter = useDateFilterStore();
   const { selectedCategory } = useCategoryFilterStore();
 
   const [activities, setActivities] = useState<WorkActivityItem[]>([]);
   const [totalHours, setTotalHours] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Log Activity Modal
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -72,10 +79,11 @@ export const WorkActivitiesPage: React.FC = () => {
           userId: user?.role === 'ADMIN' ? editMemberId : undefined,
         }),
       });
+      showToast('Work activity updated successfully', 'success');
       setEditingActivity(null);
-      fetchActivities();
+      fetchActivities(currentPage);
     } catch (err: any) {
-      alert(err.message || 'Failed to update work activity log');
+      showToast(err.message || 'Failed to update work activity log', 'error');
     } finally {
       setIsSavingEdit(false);
     }
@@ -92,21 +100,23 @@ export const WorkActivitiesPage: React.FC = () => {
       await apiFetch(`/activities/${targetId}`, {
         method: 'DELETE',
       });
-      fetchActivities();
+      showToast('Work activity log deleted', 'success');
+      fetchActivities(currentPage);
     } catch (err: any) {
-      alert(err.message || 'Failed to delete work activity log');
-      fetchActivities();
+      showToast(err.message || 'Failed to delete work activity log', 'error');
+      fetchActivities(currentPage);
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const fetchActivities = async () => {
-    if (activities.length === 0) {
-      setIsLoading(true);
-    }
+  const fetchActivities = async (page = currentPage) => {
+    setIsLoading(true);
     try {
       const params = new URLSearchParams();
+      params.append('page', String(page));
+      params.append('limit', '25');
+
       if (globalFilter.rangeType && globalFilter.rangeType !== 'all') {
         params.append('period', globalFilter.rangeType);
       }
@@ -117,6 +127,9 @@ export const WorkActivitiesPage: React.FC = () => {
       const res = await apiFetch<any>(`/activities?${params.toString()}`);
       setActivities(res.activities || []);
       setTotalHours(res.totalHours || 0);
+      setTotalCount(res.total ?? res.count ?? (res.activities?.length || 0));
+      setTotalPages(res.totalPages || 1);
+      setCurrentPage(page);
     } catch (err: any) {
       console.error('Failed to load activities:', err);
     } finally {
@@ -166,8 +179,9 @@ export const WorkActivitiesPage: React.FC = () => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      showToast('Excel report exported successfully', 'success');
     } catch (err: any) {
-      alert('Failed to export Excel report: ' + err.message);
+      showToast('Failed to export Excel report: ' + err.message, 'error');
     }
   };
 
@@ -184,11 +198,12 @@ export const WorkActivitiesPage: React.FC = () => {
         }),
       });
 
+      showToast('Work activity logged successfully', 'success');
       setIsLogModalOpen(false);
       setLogDescription('');
-      fetchActivities();
+      fetchActivities(1);
     } catch (err: any) {
-      alert(err.message || 'Failed to log work activity');
+      showToast(err.message || 'Failed to log work activity', 'error');
     }
   };
 
@@ -200,23 +215,24 @@ export const WorkActivitiesPage: React.FC = () => {
   });
 
   return (
-    <div className="animate-fade-in" style={{ padding: '32px 36px', width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
+    <div className="animate-fade-in" style={{ padding: '20px 24px', width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
             Work Activities <span className="text-gradient">Log</span>
           </h1>
-          <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
             Log daily work activities, track hours spent, and generate organization activity reports.
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Button variant="gradient" onClick={() => setIsLogModalOpen(true)}>
-            <Plus size={18} /> Log Work Activity
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <Button variant="gradient" size="sm" onClick={() => setIsLogModalOpen(true)}>
+            <Plus size={16} /> Log Work Activity
           </Button>
           <Button
             variant="secondary"
+            size="sm"
             onClick={handleExportExcel}
             style={{
               background: 'linear-gradient(135deg, #1D6F42, #217346)',
@@ -225,16 +241,16 @@ export const WorkActivitiesPage: React.FC = () => {
               fontWeight: 700,
             }}
           >
-            <Download size={18} /> Export Full Report (Excel)
+            <Download size={16} /> Export Excel
           </Button>
         </div>
       </div>
 
       {/* Internal Work Activity Table */}
-      <div className="glass-card" style={{ padding: '28px', overflow: 'hidden', width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <FileText size={20} color="var(--primary)" />
+      <div className="glass-card" style={{ padding: '20px', overflow: 'hidden', width: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FileText size={18} color="var(--primary)" />
             Activity Log Records
           </h3>
 
@@ -242,27 +258,24 @@ export const WorkActivitiesPage: React.FC = () => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
-              padding: '8px 16px',
+              gap: '8px',
+              padding: '6px 14px',
               borderRadius: 'var(--radius-full)',
               backgroundColor: 'var(--primary-light)',
               border: '1px solid var(--border-color)',
             }}
           >
-            <Clock size={16} color="var(--primary)" />
-            <span style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Time Logged:</span>
-            <strong style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary)' }}>
+            <Clock size={15} color="var(--primary)" />
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Time Logged:</span>
+            <strong style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--primary)' }}>
               {totalHours.toFixed(1)} Hours
             </strong>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>({filteredActivities.length} logs)</span>
+            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: 600 }}>({totalCount} total)</span>
           </div>
         </div>
 
         {isLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-secondary)' }}>
-            <Sparkles className="animate-pulse-glow" size={24} color="var(--primary)" style={{ marginBottom: '10px' }} />
-            <p style={{ fontWeight: 600 }}>Loading activity logs...</p>
-          </div>
+          <TableSkeleton rows={6} cols={8} />
         ) : filteredActivities.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
             No work activity logs match the selected category or filter.
@@ -382,6 +395,17 @@ export const WorkActivitiesPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+        )}
+
+        {!isLoading && filteredActivities.length > 0 && (
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalCount}
+            pageSize={25}
+            onPageChange={(page) => fetchActivities(page)}
+            isLoading={isLoading}
+          />
         )}
       </div>
 

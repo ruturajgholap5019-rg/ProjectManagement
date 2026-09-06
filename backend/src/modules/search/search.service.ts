@@ -1,18 +1,22 @@
 import { User, Project, MemberSkill, ProjectMember, WorkActivity } from '../../models/index.js';
+import { escapeRegex } from '../../utils/sanitize.js';
 
 export class GlobalSearchService {
   static async search(query: string) {
-    const q = query.trim();
+    const q = (query || '').trim().slice(0, 50);
     if (!q) {
       return { members: [], projects: [] };
     }
 
-    const regex = new RegExp(q, 'i');
+    const safePattern = escapeRegex(q);
+    const regex = new RegExp(safePattern, 'i');
 
-    // 1. Search Team Members
+    // 1. Search Team Members (limited to 25)
     const membersDocs = await User.find({
       $or: [{ firstName: regex }, { lastName: regex }, { email: regex }],
-    }).lean();
+    })
+      .limit(25)
+      .lean();
 
     const memberUserIds = membersDocs.map((m: any) => m._id);
 
@@ -65,10 +69,12 @@ export class GlobalSearchService {
       };
     });
 
-    // 2. Search Projects
+    // 2. Search Projects (limited to 25)
     const projectDocs = await Project.find({
       $or: [{ name: regex }, { scope: regex }, { description: regex }],
-    }).lean();
+    })
+      .limit(25)
+      .lean();
 
     const searchProjectIds = projectDocs.map((p: any) => p._id);
     const searchLeadIds = [

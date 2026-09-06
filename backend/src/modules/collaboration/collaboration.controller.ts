@@ -4,7 +4,7 @@ import { AttachmentService } from './attachment.service.js';
 import { sendSuccess } from '../../utils/apiResponse.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { validateFileMagicBytes } from '../../utils/fileValidation.js';
-import { Attachment } from '../../models/index.js';
+import { Attachment, Project, ProjectMember } from '../../models/index.js';
 import fs from 'fs';
 
 export class CollaborationController {
@@ -13,8 +13,19 @@ export class CollaborationController {
       if (!req.user) throw new AppError('Unauthorized', 401);
 
       const { projectId, taskId, content } = req.body;
+      const targetProjectId = projectId || req.params.id;
+
+      if (targetProjectId && req.user.role !== 'ADMIN') {
+        const project = await Project.findById(targetProjectId).lean();
+        const isLead = project && (project as any).leadId === req.user.id;
+        const membership = await ProjectMember.findOne({ projectId: targetProjectId, userId: req.user.id }).lean();
+        if (!isLead && !membership) {
+          throw new AppError('Forbidden: You do not have access to this project.', 403);
+        }
+      }
+
       const comment = await CommentService.createComment({
-        projectId: projectId || req.params.id,
+        projectId: targetProjectId,
         taskId,
         userId: req.user.id,
         content,
@@ -29,8 +40,19 @@ export class CollaborationController {
   static async listComments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { projectId, taskId } = req.query;
+      const targetProjectId = (projectId || req.params.id) as string | undefined;
+
+      if (targetProjectId && req.user && req.user.role !== 'ADMIN') {
+        const project = await Project.findById(targetProjectId).lean();
+        const isLead = project && (project as any).leadId === req.user.id;
+        const membership = await ProjectMember.findOne({ projectId: targetProjectId, userId: req.user.id }).lean();
+        if (!isLead && !membership) {
+          throw new AppError('Forbidden: You do not have access to this project.', 403);
+        }
+      }
+
       const comments = await CommentService.listComments({
-        projectId: (projectId || req.params.id) as string | undefined,
+        projectId: targetProjectId,
         taskId: taskId as string | undefined,
       });
 
@@ -43,8 +65,19 @@ export class CollaborationController {
   static async listAttachments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { projectId, taskId } = req.query;
+      const targetProjectId = (projectId || req.params.id) as string | undefined;
+
+      if (targetProjectId && req.user && req.user.role !== 'ADMIN') {
+        const project = await Project.findById(targetProjectId).lean();
+        const isLead = project && (project as any).leadId === req.user.id;
+        const membership = await ProjectMember.findOne({ projectId: targetProjectId, userId: req.user.id }).lean();
+        if (!isLead && !membership) {
+          throw new AppError('Forbidden: You do not have access to this project.', 403);
+        }
+      }
+
       const attachments = await AttachmentService.listAttachments({
-        projectId: (projectId || req.params.id) as string | undefined,
+        projectId: targetProjectId,
         taskId: taskId as string | undefined,
       });
 
@@ -61,6 +94,16 @@ export class CollaborationController {
       if (!file) throw new AppError('No file provided for upload', 400);
 
       const { projectId, taskId } = req.body;
+
+      if (projectId && req.user.role !== 'ADMIN') {
+        const project = await Project.findById(projectId).lean();
+        const isLead = project && (project as any).leadId === req.user.id;
+        const membership = await ProjectMember.findOne({ projectId, userId: req.user.id }).lean();
+        if (!isLead && !membership) {
+          if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+          throw new AppError('Forbidden: You do not have access to this project.', 403);
+        }
+      }
 
       const isValidMagic = await validateFileMagicBytes(file.path, file.mimetype);
       if (!isValidMagic) {
@@ -98,6 +141,15 @@ export class CollaborationController {
 
       if (!attachment) {
         throw new AppError('Attachment not found', 404);
+      }
+
+      if (attachment.projectId && req.user.role !== 'ADMIN') {
+        const project = await Project.findById(attachment.projectId).lean();
+        const isLead = project && (project as any).leadId === req.user.id;
+        const membership = await ProjectMember.findOne({ projectId: attachment.projectId, userId: req.user.id }).lean();
+        if (!isLead && !membership) {
+          throw new AppError('Forbidden: You do not have access to download files from this project.', 403);
+        }
       }
 
       const filePath = attachment.filePath;

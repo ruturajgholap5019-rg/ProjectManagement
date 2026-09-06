@@ -5,12 +5,13 @@ import { sendSuccess } from '../../utils/apiResponse.js';
 export class ActivityController {
   static async logActivity(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      const targetUserId = req.user!.role === 'ADMIN' && req.body.userId ? req.body.userId : req.user!.id;
       const activity = await ActivityService.logActivity({
-        userId: req.body.userId || req.user!.id,
+        userId: targetUserId,
         projectId: req.body.projectId,
         workDescription: req.body.workDescription || req.body.description,
         hoursSpent: req.body.hoursSpent,
-        assignedById: req.user!.role === 'ADMIN' ? req.user!.id : undefined,
+        assignedById: req.user!.role === 'ADMIN' && req.body.userId ? req.user!.id : undefined,
         dateTime: req.body.dateTime,
       });
       sendSuccess(res, activity, 'Work activity logged successfully', 201);
@@ -33,6 +34,8 @@ export class ActivityController {
         startDate: req.query.startDate as string,
         endDate: req.query.endDate as string,
         search: req.query.search as string,
+        page: req.query.page ? Number(req.query.page) : undefined,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
       });
       sendSuccess(res, result, 'Work activities retrieved successfully');
     } catch (error) {
