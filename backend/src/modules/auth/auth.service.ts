@@ -26,7 +26,7 @@ export class AuthService {
   }
 
   static async login(email: string, password: string) {
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+passwordHash');
 
     if (!user) {
       throw new AppError('Invalid email or password', 401);
@@ -118,7 +118,7 @@ export class AuthService {
   }
 
   static async changePassword(userId: string, currentPass: string, newPass: string) {
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('+passwordHash');
 
     if (!user) {
       throw new AppError('User not found', 404);

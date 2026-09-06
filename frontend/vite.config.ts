@@ -36,15 +36,11 @@ export default defineConfig({
           if (id.includes('node_modules/zustand')) {
             return 'vendor-state';
           }
-          // PDF generation \u2014 very heavy, should only load when user generates a report
-          if (id.includes('jspdf') || id.includes('pdfmake') || id.includes('html2pdf') || id.includes('html2canvas')) {
+          // PDF generator utility — keep isolated
+          if (id.includes('pdfReportGenerator')) {
             return 'vendor-pdf';
           }
-          // Chart libraries
-          if (id.includes('recharts') || id.includes('chart.js') || id.includes('d3')) {
-            return 'vendor-charts';
-          }
-          // Other large node_modules \u2014 group to avoid per-chunk duplication
+          // Other large node_modules — group to avoid per-chunk duplication
           if (id.includes('node_modules/')) {
             return 'vendor-misc';
           }

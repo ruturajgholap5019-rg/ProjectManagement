@@ -18,7 +18,6 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
     const admin = await User.create({
       email: 'admin@organization.com',
       passwordHash: commonPassword,
-      rawPassword: 'Password123!',
       firstName: 'System',
       lastName: 'Admin',
       role: 'ADMIN',
@@ -30,7 +29,6 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
     const defaultStudent = await User.create({
       email: 'student@organization.com',
       passwordHash: commonPassword,
-      rawPassword: 'Password123!',
       firstName: 'Alex',
       lastName: 'Rivers',
       role: 'TEAM_MEMBER',
@@ -73,7 +71,6 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
       const user = await User.create({
         email: m.email,
         passwordHash: commonPassword,
-        rawPassword: 'Password123!',
         firstName: m.firstName,
         lastName: m.lastName,
         phone: m.phone,

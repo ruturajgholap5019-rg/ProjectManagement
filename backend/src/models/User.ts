@@ -29,7 +29,7 @@ const UserSchema = new Schema<IUser>(
   {
     _id: { type: String, default: () => randomUUID() },
     email: { type: String, required: true, unique: true, trim: true, lowercase: true, index: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, required: true, select: false },
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     role: { type: String, required: true, default: 'TEAM_MEMBER', index: true },
@@ -52,6 +52,8 @@ const UserSchema = new Schema<IUser>(
       virtuals: true,
       transform: (_doc, ret: any) => {
         ret.id = ret._id;
+        delete ret.passwordHash;
+        delete ret.rawPassword;
         delete ret.__v;
         return ret;
       },
@@ -60,6 +62,8 @@ const UserSchema = new Schema<IUser>(
       virtuals: true,
       transform: (_doc, ret: any) => {
         ret.id = ret._id;
+        delete ret.passwordHash;
+        delete ret.rawPassword;
         delete ret.__v;
         return ret;
       },

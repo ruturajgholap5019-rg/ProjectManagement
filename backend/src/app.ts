@@ -9,8 +9,12 @@ import { env } from './config/env.js';
 import { sendSuccess } from './utils/apiResponse.js';
 import apiRouter from './routes/index.js';
 import { errorHandler } from './middlewares/error.middleware.js';
+import { mongoSanitize } from './middlewares/mongoSanitize.middleware.js';
 
 const app = express();
+
+// Disable Server Fingerprinting
+app.disable('x-powered-by');
 
 // Enable Trust Proxy for Cloudflare & Reverse Proxies
 app.set('trust proxy', true);
@@ -27,11 +31,21 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Security Middlewares
+// Security Middlewares — Hardened Headers
 app.use(
   helmet({
-    contentSecurityPolicy: false, // Allow inline styles & fonts
+    contentSecurityPolicy: false, // Allow inline styles & fonts for SPA
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    xContentTypeOptions: true,
+    dnsPrefetchControl: { allow: false },
+    frameguard: { action: 'deny' }, // Anti-clickjacking defense
+    hidePoweredBy: true,
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   })
 );
 app.use(
@@ -63,7 +77,21 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Rate Limiting — Auth Endpoints
+// Anti-NoSQL Operator Injection Middleware (Sanitizes req.body, req.query, req.params)
+app.use(mongoSanitize);
+
+// Global API Rate Limiting (Defense against DDoS, scraping, and brute force)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: env.NODE_ENV === 'development' ? 10000 : 800,
+  message: { success: false, message: 'Too many requests from this IP address. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+});
+app.use('/api/v1', apiLimiter);
+
+// Rate Limiting — Sensitive Auth Endpoints
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: env.NODE_ENV === 'development' ? 1000 : 100, // Generous limit in dev
