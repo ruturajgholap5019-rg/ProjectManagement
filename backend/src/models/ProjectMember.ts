@@ -42,6 +42,7 @@ ProjectMemberSchema.virtual('id').get(function (this: any) {
 });
 
 ProjectMemberSchema.index({ projectId: 1, userId: 1 }, { unique: true });
+ProjectMemberSchema.index({ userId: 1, projectId: 1 });
 
 export const ProjectMember =
   mongoose.models.ProjectMember || mongoose.model<IProjectMember>('ProjectMember', ProjectMemberSchema, 'project_members');

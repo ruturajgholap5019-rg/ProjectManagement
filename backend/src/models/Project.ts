@@ -76,6 +76,9 @@ ProjectSchema.virtual('id').get(function (this: any) {
 ProjectSchema.index({ projectType: 1, status: 1 });
 ProjectSchema.index({ status: 1, createdAt: -1 });
 ProjectSchema.index({ createdAt: -1 });
+ProjectSchema.index({ updatedAt: -1 });
+ProjectSchema.index({ projectType: 1, updatedAt: -1 });
+ProjectSchema.index({ leadId: 1, status: 1 });
 ProjectSchema.index({ name: 'text', description: 'text', scope: 'text' });
 
 export const Project = mongoose.models.Project || mongoose.model<IProject>('Project', ProjectSchema, 'projects');

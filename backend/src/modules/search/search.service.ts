@@ -20,20 +20,32 @@ export class GlobalSearchService {
 
     const memberUserIds = membersDocs.map((m: any) => m._id);
 
-    const [allSkills, allMemberships, allActivities] = await Promise.all([
-      MemberSkill.find({ userId: { $in: memberUserIds } }).lean(),
-      ProjectMember.find({ userId: { $in: memberUserIds } }).lean(),
-      WorkActivity.find({ userId: { $in: memberUserIds } }).sort({ dateTime: -1 }).lean(),
+    const [allSkills, allMemberships, recentActivities, hoursAgg] = await Promise.all([
+      MemberSkill.find({ userId: { $in: memberUserIds } }, 'userId skillName proficiency notes createdAt _id').lean(),
+      ProjectMember.find({ userId: { $in: memberUserIds } }, 'userId projectId _id').lean(),
+      WorkActivity.find(
+        { userId: { $in: memberUserIds } },
+        'userId projectId workDescription hoursSpent dateTime _id'
+      )
+        .sort({ dateTime: -1 })
+        .limit(100)
+        .lean(),
+      WorkActivity.aggregate([
+        { $match: { userId: { $in: memberUserIds } } },
+        { $group: { _id: '$userId', totalHours: { $sum: '$hoursSpent' } } },
+      ]),
     ]);
+
+    const userHoursMap = new Map(hoursAgg.map((h: any) => [h._id, h.totalHours]));
 
     const projectIds = [
       ...new Set([
         ...allMemberships.map((m: any) => m.projectId),
-        ...allActivities.map((a: any) => a.projectId),
+        ...recentActivities.map((a: any) => a.projectId),
       ]),
     ];
 
-    const projects = await Project.find({ _id: { $in: projectIds } }).lean();
+    const projects = await Project.find({ _id: { $in: projectIds } }, 'name status projectType startDate targetEndDate _id').lean();
     const projectMap = new Map(projects.map((p: any) => [p._id, { id: p._id, name: p.name, status: p.status, projectType: p.projectType, startDate: p.startDate, targetEndDate: p.targetEndDate }]));
 
     const formattedMembers = membersDocs.map((m: any) => {
@@ -44,7 +56,7 @@ export class GlobalSearchService {
       const ongoingProjects = userProjects.filter((p: any) => ['ONGOING', 'ACTIVE', 'PLANNING'].includes(p.status));
       const completedProjects = userProjects.filter((p: any) => ['COMPLETED', 'HANDED_OVER'].includes(p.status));
 
-      const userActivities = allActivities
+      const userActivities = recentActivities
         .filter((a: any) => a.userId === m._id)
         .slice(0, 20)
         .map((a: any) => ({
@@ -53,7 +65,7 @@ export class GlobalSearchService {
           project: projectMap.get(a.projectId) ? { id: a.projectId, name: projectMap.get(a.projectId)!.name } : null,
         }));
 
-      const totalHoursSpent = userActivities.reduce((acc: number, a: any) => acc + (a.hoursSpent || 0), 0);
+      const totalHoursSpent = userHoursMap.get(m._id) || 0;
 
       return {
         id: m._id,

@@ -46,6 +46,7 @@ ActivityLogSchema.virtual('id').get(function (this: any) {
   return this._id;
 });
 
+ActivityLogSchema.index({ createdAt: -1 });
 ActivityLogSchema.index({ projectId: 1, createdAt: -1 });
 ActivityLogSchema.index({ taskId: 1, createdAt: -1 });
 ActivityLogSchema.index({ userId: 1, createdAt: -1 });  // Dashboard recent activities by user

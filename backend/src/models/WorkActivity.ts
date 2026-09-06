@@ -51,6 +51,7 @@ WorkActivitySchema.virtual('id').get(function (this: any) {
 });
 
 WorkActivitySchema.index({ userId: 1, dateTime: 1 });
+WorkActivitySchema.index({ userId: 1, dateTime: -1 });
 WorkActivitySchema.index({ projectId: 1, dateTime: 1 });
 WorkActivitySchema.index({ userId: 1, projectId: 1, dateTime: -1 });
 WorkActivitySchema.index({ dateTime: -1 });

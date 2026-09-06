@@ -78,6 +78,9 @@ TaskSchema.virtual('id').get(function (this: any) {
 TaskSchema.index({ projectId: 1, status: 1 });      // Task list by project+status (most common query)
 TaskSchema.index({ projectId: 1, milestoneId: 1, status: 1 }); // Milestone-specific task query
 TaskSchema.index({ assigneeId: 1, status: 1 });     // My tasks by assignee+status
+TaskSchema.index({ coAssigneeId: 1, status: 1 });   // Tasks by co-assignee+status
+TaskSchema.index({ assigneeId: 1, dueDate: 1 });    // Member tasks ordered by due date
+TaskSchema.index({ coAssigneeId: 1, dueDate: 1 });  // Co-assigned tasks ordered by due date
 TaskSchema.index({ dueDate: 1, status: 1 });         // Overdue tasks filter
 TaskSchema.index({ createdById: 1, createdAt: -1 }); // Created tasks by date
 

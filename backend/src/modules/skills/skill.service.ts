@@ -32,26 +32,34 @@ export class SkillService {
     const user = await User.findById(userId).lean();
     if (!user) throw new AppError('User not found', 404);
 
-    const [skills, memberships, workActivities] = await Promise.all([
-      MemberSkill.find({ userId }).lean(),
-      ProjectMember.find({ userId }).lean(),
-      WorkActivity.find({ userId }).sort({ dateTime: -1 }).lean(),
+    const [skills, memberships, recentActivities, activityAgg] = await Promise.all([
+      MemberSkill.find({ userId }, 'skillName proficiency notes createdAt _id').lean(),
+      ProjectMember.find({ userId }, 'projectId joinedAt _id').lean(),
+      WorkActivity.find({ userId }, 'serialNo workDescription hoursSpent dateTime projectId _id')
+        .sort({ dateTime: -1 })
+        .limit(50)
+        .lean(),
+      WorkActivity.aggregate([
+        { $match: { userId } },
+        { $group: { _id: null, totalHours: { $sum: '$hoursSpent' } } },
+      ]),
     ]);
+
+    const totalHoursSpent = activityAgg[0]?.totalHours || 0;
 
     const projectIds = [
       ...new Set([
         ...memberships.map((m: any) => m.projectId),
-        ...workActivities.map((w: any) => w.projectId),
+        ...recentActivities.map((w: any) => w.projectId),
       ]),
     ];
 
-    const projects = await Project.find({ _id: { $in: projectIds } }).lean();
+    const projects = await Project.find({ _id: { $in: projectIds } }, 'name status projectType priority _id').lean();
     const projectMap = new Map(projects.map((p: any) => [p._id, { ...p, id: p._id }]));
 
     const allProjects = memberships.map((pm: any) => projectMap.get(pm.projectId)).filter(Boolean);
     const ongoingProjects = allProjects.filter((p: any) => ['ONGOING', 'ACTIVE', 'PLANNING'].includes(p.status));
     const completedProjects = allProjects.filter((p: any) => ['COMPLETED', 'HANDED_OVER'].includes(p.status));
-    const totalHoursSpent = workActivities.reduce((acc: number, a: any) => acc + (a.hoursSpent || 0), 0);
 
     return {
       user: {
@@ -66,7 +74,7 @@ export class SkillService {
       completedProjects,
       allProjects,
       totalHoursSpent,
-      workActivities: workActivities.map((w: any) => ({
+      workActivities: recentActivities.map((w: any) => ({
         ...w,
         id: w._id,
         project: projectMap.get(w.projectId) || null,

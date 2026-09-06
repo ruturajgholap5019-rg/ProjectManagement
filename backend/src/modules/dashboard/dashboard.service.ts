@@ -66,7 +66,7 @@ export class DashboardService {
       result = await this.getMemberDashboard(user.id, pWhere, dateRange);
     }
 
-    await cacheSet(cacheKey, result, 300); // 5-min TTL (reduced from 600 for fresher data)
+    await cacheSet(cacheKey, result, 300); // 5-min TTL
     return result;
   }
 
@@ -78,15 +78,37 @@ export class DashboardService {
       taskFilter.projectId = { $in: catProjIds };
     }
 
-    const [totalProjects, activeProjects, atRiskProjects, totalUsers, activeTasks] = await Promise.all([
-      Project.countDocuments({ ...pWhere, status: { $ne: 'CANCELLED' } }),
-      Project.countDocuments({ ...pWhere, status: { $in: ['ACTIVE', 'ONGOING'] } }),
-      Project.countDocuments({ ...pWhere, status: 'AT_RISK' }),
+    // Consolidated project status metrics via single aggregation
+    const [projectCountsAgg, totalUsers, activeTasks] = await Promise.all([
+      Project.aggregate([
+        { $match: { ...pWhere, status: { $ne: 'CANCELLED' } } },
+        {
+          $group: {
+            _id: null,
+            totalProjects: { $sum: 1 },
+            activeProjects: {
+              $sum: { $cond: [{ $in: ['$status', ['ACTIVE', 'ONGOING']] }, 1, 0] },
+            },
+            atRiskProjects: {
+              $sum: { $cond: [{ $eq: ['$status', 'AT_RISK'] }, 1, 0] },
+            },
+          },
+        },
+      ]),
       User.countDocuments({ isActive: true, role: { $ne: 'ADMIN' } }),
       Task.countDocuments(taskFilter),
     ]);
 
-    const attentionRequiredDocs = await Project.find({ ...pWhere, status: { $in: ['AT_RISK', 'ON_HOLD'] } })
+    const pStats = projectCountsAgg[0] || { totalProjects: 0, activeProjects: 0, atRiskProjects: 0 };
+    const totalProjects = pStats.totalProjects;
+    const activeProjects = pStats.activeProjects;
+    const atRiskProjects = pStats.atRiskProjects;
+
+    // Attention-required projects with lean field projection
+    const attentionRequiredDocs = await Project.find(
+      { ...pWhere, status: { $in: ['AT_RISK', 'ON_HOLD'] } },
+      'name status statusReason leadId _id'
+    )
       .limit(5)
       .lean();
 
@@ -102,21 +124,42 @@ export class DashboardService {
       lead: p.leadId ? attentionLeadMap.get(p.leadId) || null : null,
     }));
 
-    const recentProjectsDocs = await Project.find(pWhere).sort({ updatedAt: -1 }).limit(5).lean();
+    // Recent projects with lean field projection
+    const recentProjectsDocs = await Project.find(
+      pWhere,
+      'name status projectType priority leadId updatedAt _id'
+    )
+      .sort({ updatedAt: -1 })
+      .limit(5)
+      .lean();
     const projectIds = recentProjectsDocs.map((p: any) => p._id);
 
-    const [recentLeads, recentMemberships, recentTasks] = await Promise.all([
+    // MongoDB Aggregation for task counts and member counts per project (zero in-memory nested loops)
+    const [recentLeads, taskStatsAgg, memberStatsAgg] = await Promise.all([
       User.find({ _id: { $in: recentProjectsDocs.map((p: any) => p.leadId).filter(Boolean) } }, 'firstName lastName _id').lean(),
-      ProjectMember.find({ projectId: { $in: projectIds } }).lean(),
-      Task.find({ projectId: { $in: projectIds } }, 'projectId status _id').lean(),
+      Task.aggregate([
+        { $match: { projectId: { $in: projectIds } } },
+        {
+          $group: {
+            _id: '$projectId',
+            totalTasks: { $sum: 1 },
+            completedTasks: { $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] } },
+          },
+        },
+      ]),
+      ProjectMember.aggregate([
+        { $match: { projectId: { $in: projectIds } } },
+        { $group: { _id: '$projectId', memberCount: { $sum: 1 } } },
+      ]),
     ]);
 
     const recentLeadMap = new Map(recentLeads.map((u: any) => [u._id, { id: u._id, firstName: u.firstName, lastName: u.lastName }]));
+    const taskStatsMap = new Map(taskStatsAgg.map((t: any) => [t._id, t]));
+    const memberStatsMap = new Map(memberStatsAgg.map((m: any) => [m._id, m.memberCount]));
 
     const recentProjectsWithStats = recentProjectsDocs.map((p: any) => {
-      const projTasks = recentTasks.filter((t: any) => t.projectId === p._id);
-      const completedTasks = projTasks.filter((t: any) => t.status === 'COMPLETED').length;
-      const memberCount = recentMemberships.filter((m: any) => m.projectId === p._id).length;
+      const tStats = taskStatsMap.get(p._id) || { totalTasks: 0, completedTasks: 0 };
+      const memberCount = memberStatsMap.get(p._id) || 0;
 
       return {
         id: p._id,
@@ -125,19 +168,27 @@ export class DashboardService {
         projectType: p.projectType,
         priority: p.priority,
         lead: p.leadId ? recentLeadMap.get(p.leadId) || null : null,
-        totalTasks: projTasks.length,
-        completedTasks,
+        totalTasks: tStats.totalTasks,
+        completedTasks: tStats.completedTasks,
         memberCount,
       };
     });
 
+    // Recent activities feed with lean projection
     const activityQuery: any = {};
     if (dateRange.start || dateRange.end) {
       activityQuery.createdAt = {};
       if (dateRange.start) activityQuery.createdAt.$gte = dateRange.start;
       if (dateRange.end) activityQuery.createdAt.$lte = dateRange.end;
     }
-    const recentActivitiesDocs = await ActivityLog.find(activityQuery).sort({ createdAt: -1 }).limit(6).lean();
+    const recentActivitiesDocs = await ActivityLog.find(
+      activityQuery,
+      'action details userId projectId createdAt _id'
+    )
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .lean();
+
     const actUserIds = recentActivitiesDocs.map((a: any) => a.userId).filter(Boolean);
     const actProjectIds = recentActivitiesDocs.map((a: any) => a.projectId).filter(Boolean);
 
@@ -169,12 +220,30 @@ export class DashboardService {
     const myProjectsDocs = await Project.find({ leadId, ...pWhere }, 'name status statusReason _id').lean();
     const projectIds = myProjectsDocs.map((p: any) => p._id);
 
-    const [totalTasks, pendingReviews, blockedTasks, pendingReviewListDocs] = await Promise.all([
-      Task.countDocuments({ projectId: { $in: projectIds } }),
-      Task.countDocuments({ projectId: { $in: projectIds }, status: 'REVIEW' }),
-      Task.countDocuments({ projectId: { $in: projectIds }, isBlocked: true }),
-      Task.find({ projectId: { $in: projectIds }, status: 'REVIEW' }).limit(5).lean(),
+    const [taskMetricsAgg, pendingReviewListDocs] = await Promise.all([
+      Task.aggregate([
+        { $match: { projectId: { $in: projectIds } } },
+        {
+          $group: {
+            _id: null,
+            totalTasks: { $sum: 1 },
+            pendingReviews: { $sum: { $cond: [{ $eq: ['$status', 'REVIEW'] }, 1, 0] } },
+            blockedTasks: { $sum: { $cond: [{ $eq: ['$isBlocked', true] }, 1, 0] } },
+          },
+        },
+      ]),
+      Task.find(
+        { projectId: { $in: projectIds }, status: 'REVIEW' },
+        'title status priority dueDate assigneeId projectId _id'
+      )
+        .limit(5)
+        .lean(),
     ]);
+
+    const prMetrics = taskMetricsAgg[0] || { totalTasks: 0, pendingReviews: 0, blockedTasks: 0 };
+    const totalTasks = prMetrics.totalTasks;
+    const pendingReviews = prMetrics.pendingReviews;
+    const blockedTasks = prMetrics.blockedTasks;
 
     const prAssigneeIds = pendingReviewListDocs.map((t: any) => t.assigneeId).filter(Boolean);
     const prProjectIds = pendingReviewListDocs.map((t: any) => t.projectId).filter(Boolean);
@@ -202,7 +271,7 @@ export class DashboardService {
     };
   }
 
-  private static async getMemberDashboard(memberId: string, pWhere: any = {}, dateRange: { start?: Date; end?: Date } = {}) {
+  private static async getMemberDashboard(memberId: string, pWhere: any = {}, _dateRange: { start?: Date; end?: Date } = {}) {
     const userMemberships = await ProjectMember.find({ userId: memberId }, 'projectId').lean();
     const memberProjectIds = userMemberships.map((m: any) => m.projectId);
 
@@ -221,32 +290,97 @@ export class DashboardService {
       taskQuery.projectId = { $in: catProjIds };
     }
 
-    const [assignedTasksDocs, assignedProjectsRaw, myActivitiesDocs, allUserActivities] = await Promise.all([
-      Task.find(taskQuery).sort({ dueDate: 1 }).lean(),
-      Project.find(projectQuery).sort({ updatedAt: -1 }).lean(),
-      WorkActivity.find({ userId: memberId }).sort({ dateTime: -1 }).limit(5).lean(),
-      WorkActivity.find({ userId: memberId }, 'hoursSpent').lean(),
+    // High-performance parallel data retrieval:
+    // 1. Task metrics aggregated in MongoDB
+    // 2. Member WorkActivity hours & count aggregated in MongoDB (eliminates fetching 50,000 documents)
+    // 3. Assigned projects with lean fields
+    // 4. Pending tasks for Work Next queue (limited to 10)
+    // 5. Recent activities (limited to 5)
+    const [taskMetricsAgg, activityMetricsAgg, assignedProjectsDocs, workNextDocs, myActivitiesDocs] = await Promise.all([
+      Task.aggregate([
+        { $match: taskQuery },
+        {
+          $group: {
+            _id: null,
+            totalTasks: { $sum: 1 },
+            completedTasks: { $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] } },
+            inProgressTasks: { $sum: { $cond: [{ $in: ['$status', ['IN_PROGRESS', 'REVIEW']] }, 1, 0] } },
+            todoTasks: { $sum: { $cond: [{ $eq: ['$status', 'TODO'] }, 1, 0] } },
+            revisionTasks: { $sum: { $cond: [{ $eq: ['$status', 'REVISION'] }, 1, 0] } },
+          },
+        },
+      ]),
+      WorkActivity.aggregate([
+        { $match: { userId: memberId } },
+        {
+          $group: {
+            _id: null,
+            totalHours: { $sum: '$hoursSpent' },
+            totalActivities: { $sum: 1 },
+          },
+        },
+      ]),
+      Project.find(
+        projectQuery,
+        'name status projectType priority targetEndDate _id'
+      )
+        .sort({ updatedAt: -1 })
+        .lean(),
+      Task.find(
+        { ...taskQuery, status: { $ne: 'COMPLETED' } },
+        'title status priority dueDate projectId isBlocked blockedReason _id'
+      )
+        .sort({ dueDate: 1 })
+        .limit(10)
+        .lean(),
+      WorkActivity.find(
+        { userId: memberId },
+        'serialNo workDescription hoursSpent dateTime projectId _id'
+      )
+        .sort({ dateTime: -1 })
+        .limit(5)
+        .lean(),
     ]);
 
-    const taskProjectIds = assignedTasksDocs.map((t: any) => t.projectId);
-    const activityProjectIds = myActivitiesDocs.map((a: any) => a.projectId);
-    const assignedProjectIds = assignedProjectsRaw.map((p: any) => p._id);
+    const taskMetrics = taskMetricsAgg[0] || {
+      totalTasks: 0,
+      completedTasks: 0,
+      inProgressTasks: 0,
+      todoTasks: 0,
+      revisionTasks: 0,
+    };
+    const totalHoursLogged = activityMetricsAgg[0]?.totalHours || 0;
+    const totalActivities = activityMetricsAgg[0]?.totalActivities || 0;
 
-    const allProjectIds = [...new Set([...taskProjectIds, ...activityProjectIds, ...assignedProjectIds])];
-    const projects = await Project.find({ _id: { $in: allProjectIds } }, 'name projectType status priority targetEndDate _id').lean();
-    const projectMap = new Map(projects.map((p: any) => [p._id, p]));
+    const assignedProjectIds = assignedProjectsDocs.map((p: any) => p._id);
 
-    const [allAssignedProjectTasks, allAssignedMemberships] = await Promise.all([
-      Task.find({ projectId: { $in: assignedProjectIds } }, 'projectId status _id').lean(),
-      ProjectMember.find({ projectId: { $in: assignedProjectIds } }).lean(),
+    // Aggregate task stats and member counts across assigned projects directly in MongoDB
+    const [assignedTaskStats, assignedMemberStats] = await Promise.all([
+      Task.aggregate([
+        { $match: { projectId: { $in: assignedProjectIds } } },
+        {
+          $group: {
+            _id: '$projectId',
+            totalTasks: { $sum: 1 },
+            completedTasks: { $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] } },
+          },
+        },
+      ]),
+      ProjectMember.aggregate([
+        { $match: { projectId: { $in: assignedProjectIds } } },
+        { $group: { _id: '$projectId', memberCount: { $sum: 1 } } },
+      ]),
     ]);
 
-    const myProjects = assignedProjectsRaw.map((p: any) => {
-      const projTasks = allAssignedProjectTasks.filter((t: any) => t.projectId === p._id);
-      const totalTasks = projTasks.length;
-      const completedTasks = projTasks.filter((t: any) => t.status === 'COMPLETED').length;
+    const taskStatsMap = new Map(assignedTaskStats.map((t: any) => [t._id, t]));
+    const memberStatsMap = new Map(assignedMemberStats.map((m: any) => [m._id, m.memberCount]));
+
+    const myProjects = assignedProjectsDocs.map((p: any) => {
+      const tStats = taskStatsMap.get(p._id) || { totalTasks: 0, completedTasks: 0 };
+      const totalTasks = tStats.totalTasks;
+      const completedTasks = tStats.completedTasks;
       const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      const memberCount = allAssignedMemberships.filter((m: any) => m.projectId === p._id).length;
+      const memberCount = memberStatsMap.get(p._id) || 0;
 
       return {
         id: p._id,
@@ -262,56 +396,59 @@ export class DashboardService {
       };
     });
 
-    const now = new Date();
+    // Resolve project headers for workNext and myActivities
+    const neededProjectIds = [
+      ...new Set([
+        ...workNextDocs.map((t: any) => t.projectId),
+        ...myActivitiesDocs.map((a: any) => a.projectId),
+      ]),
+    ];
+    const projectHeaders = await Project.find({ _id: { $in: neededProjectIds } }, 'name _id').lean();
+    const projectHeaderMap = new Map(projectHeaders.map((p: any) => [p._id, { id: p._id, name: p.name }]));
 
-    const assignedTasks = assignedTasksDocs.map((t: any) => {
-      const p = projectMap.get(t.projectId);
+    const now = new Date();
+    const workNext = workNextDocs.map((t: any) => {
+      let reason = 'assigned';
+      if (t.dueDate && new Date(t.dueDate) < now) {
+        reason = 'overdue';
+      } else if (t.status === 'REVISION') {
+        reason = 'revision_requested';
+      } else if (t.priority === 'HIGH' || t.priority === 'CRITICAL') {
+        reason = 'high_priority';
+      }
+
       return {
-        ...t,
-        id: t._id,
-        project: p ? { id: (p as any)._id, name: (p as any).name } : null,
+        task: {
+          ...t,
+          id: t._id,
+          project: projectHeaderMap.get(t.projectId) || null,
+        },
+        reason,
       };
     });
 
-    const workNext = assignedTasks
-      .filter((t: any) => t.status !== 'COMPLETED')
-      .map((t: any) => {
-        let reason = 'assigned';
-        if (t.dueDate && new Date(t.dueDate) < now) {
-          reason = 'overdue';
-        } else if (t.status === 'REVISION') {
-          reason = 'revision_requested';
-        } else if (t.priority === 'HIGH' || t.priority === 'CRITICAL') {
-          reason = 'high_priority';
-        }
-
-        return { task: t, reason };
-      });
-
-    const totalHoursLogged = allUserActivities.reduce((acc: number, a: any) => acc + (a.hoursSpent || 0), 0);
-
     const myActivities = myActivitiesDocs.map((a: any) => {
-      const p = projectMap.get(a.projectId);
+      const p = projectHeaderMap.get(a.projectId);
       return {
         ...a,
         id: a._id,
-        project: p ? { id: (p as any)._id, name: (p as any).name } : null,
+        project: p || null,
       };
     });
 
     return {
       type: 'MEMBER',
       stats: {
-        totalProjects: assignedProjectsRaw.length,
-        activeProjects: assignedProjectsRaw.filter((p: any) => p.status === 'ONGOING' || p.status === 'ACTIVE').length,
-        completedProjects: assignedProjectsRaw.filter((p: any) => p.status === 'COMPLETED').length,
-        totalTasks: assignedTasks.length,
-        inProgressTasks: assignedTasks.filter((t: any) => ['IN_PROGRESS', 'REVIEW'].includes(t.status)).length,
-        completedTasks: assignedTasks.filter((t: any) => t.status === 'COMPLETED').length,
-        todoTasks: assignedTasks.filter((t: any) => t.status === 'TODO').length,
-        revisionTasks: assignedTasks.filter((t: any) => t.status === 'REVISION').length,
+        totalProjects: assignedProjectsDocs.length,
+        activeProjects: assignedProjectsDocs.filter((p: any) => p.status === 'ONGOING' || p.status === 'ACTIVE').length,
+        completedProjects: assignedProjectsDocs.filter((p: any) => p.status === 'COMPLETED').length,
+        totalTasks: taskMetrics.totalTasks,
+        inProgressTasks: taskMetrics.inProgressTasks,
+        completedTasks: taskMetrics.completedTasks,
+        todoTasks: taskMetrics.todoTasks,
+        revisionTasks: taskMetrics.revisionTasks,
         totalHoursLogged: Number(totalHoursLogged.toFixed(1)),
-        totalActivities: allUserActivities.length,
+        totalActivities,
       },
       myProjects: myProjects.slice(0, 4),
       workNext: workNext.slice(0, 5),
