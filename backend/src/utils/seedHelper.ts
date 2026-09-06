@@ -12,7 +12,7 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
 
     logger.info('🌱 Empty database detected in MongoDB. Auto-seeding initial Admin, Students, and Projects data...');
 
-    const commonPassword = await bcrypt.hash('Password123!', 12);
+    const commonPassword = await bcrypt.hash('Password123!', 10);
 
     // 1. Organization Admin User
     const admin = await User.create({

@@ -38,7 +38,7 @@ export class UserService {
     }
 
     const tempPassword = input.tempPassword?.trim() || `Temp#${Math.random().toString(36).slice(-6)}!`;
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
 
     const user = await User.create({
       email: normalizedEmail,
@@ -297,7 +297,7 @@ export class UserService {
     // Admin can set a new password for a user — stored ONLY as bcrypt hash, never plaintext
     const newPass = (data.newPassword || data.password || data.tempPassword)?.trim();
     if (newPass) {
-      existing.passwordHash = await bcrypt.hash(newPass, 12);
+      existing.passwordHash = await bcrypt.hash(newPass, 10);
       existing.mustChangePassword = false;
     }
 
@@ -455,7 +455,7 @@ export class UserService {
     }
 
     const tempPassword = customTempPassword?.trim() || `Reset#${Math.random().toString(36).slice(-6)}!`;
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
 
     user.passwordHash = passwordHash;
     user.mustChangePassword = true;
