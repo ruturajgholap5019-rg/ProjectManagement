@@ -9,17 +9,50 @@ import { LogOut, Users, FolderKanban, LayoutDashboard, CheckSquare, Layers, Sun,
 
 import { Login } from './pages/Login';
 import { ChangePasswordModal } from './pages/ChangePasswordModal';
-// Heavy page components — loaded on demand to reduce initial bundle size
-const UsersPage = lazy(() => import('./pages/Users').then((m) => ({ default: m.UsersPage })));
-const ProjectsPage = lazy(() => import('./pages/Projects').then((m) => ({ default: m.ProjectsPage })));
-const ProjectDetailPage = lazy(() => import('./pages/ProjectDetail').then((m) => ({ default: m.ProjectDetailPage })));
-const MyTasksPage = lazy(() => import('./pages/MyTasks').then((m) => ({ default: m.MyTasksPage })));
-const DashboardPage = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.DashboardPage })));
-const WorkActivitiesPage = lazy(() => import('./pages/WorkActivities').then((m) => ({ default: m.WorkActivitiesPage })));
-const GlobalSearchPage = lazy(() => import('./pages/GlobalSearch').then((m) => ({ default: m.GlobalSearchPage })));
-const StudentProfilePage = lazy(() => import('./pages/StudentProfile').then((m) => ({ default: m.StudentProfilePage })));
-const MyAccountPage = lazy(() => import('./pages/MyAccount').then((m) => ({ default: m.MyAccountPage })));
-const CategoryManagerModal = lazy(() => import('./components/UI/CategoryManagerModal').then((m) => ({ default: m.CategoryManagerModal })));
+import { ChunkErrorBoundary } from './components/UI/ChunkErrorBoundary';
+
+/**
+ * Resilient lazy loader that detects stale deployment chunks and reloads cleanly
+ */
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T } | any>
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    try {
+      const mod = await factory();
+      return mod.default ? mod : { default: mod };
+    } catch (error: any) {
+      const msg = error?.message || '';
+      const isDynamicImportError =
+        msg.includes('Failed to fetch dynamically imported module') ||
+        msg.includes('Expected a JavaScript-or-Wasm module script') ||
+        msg.includes('error loading dynamically imported module') ||
+        error?.name === 'ChunkLoadError';
+
+      if (isDynamicImportError) {
+        const reloadKey = 'chunk_retry_reload';
+        if (!sessionStorage.getItem(reloadKey)) {
+          sessionStorage.setItem(reloadKey, 'true');
+          window.location.reload();
+          return new Promise<{ default: T }>(() => {});
+        }
+      }
+      throw error;
+    }
+  });
+}
+
+// Heavy page components — loaded resiliently on demand
+const UsersPage = lazyWithRetry(() => import('./pages/Users').then((m) => ({ default: m.UsersPage })));
+const ProjectsPage = lazyWithRetry(() => import('./pages/Projects').then((m) => ({ default: m.ProjectsPage })));
+const ProjectDetailPage = lazyWithRetry(() => import('./pages/ProjectDetail').then((m) => ({ default: m.ProjectDetailPage })));
+const MyTasksPage = lazyWithRetry(() => import('./pages/MyTasks').then((m) => ({ default: m.MyTasksPage })));
+const DashboardPage = lazyWithRetry(() => import('./pages/Dashboard').then((m) => ({ default: m.DashboardPage })));
+const WorkActivitiesPage = lazyWithRetry(() => import('./pages/WorkActivities').then((m) => ({ default: m.WorkActivitiesPage })));
+const GlobalSearchPage = lazyWithRetry(() => import('./pages/GlobalSearch').then((m) => ({ default: m.GlobalSearchPage })));
+const StudentProfilePage = lazyWithRetry(() => import('./pages/StudentProfile').then((m) => ({ default: m.StudentProfilePage })));
+const MyAccountPage = lazyWithRetry(() => import('./pages/MyAccount').then((m) => ({ default: m.MyAccountPage })));
+const CategoryManagerModal = lazyWithRetry(() => import('./components/UI/CategoryManagerModal').then((m) => ({ default: m.CategoryManagerModal })));
 
 /** Lightweight fallback while lazy-loaded pages initialize */
 const PageLoader: React.FC = () => (
@@ -986,40 +1019,42 @@ export const App: React.FC = () => {
 
           {/* Page Content Workspace */}
           <main style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-main)' }}>
-            <Suspense fallback={<PageLoader />}>
-              {activeTab === 'dashboard' && <DashboardPage />}
-              {activeTab === 'projects' && !selectedProjectId && (
-                <ProjectsPage
-                  onSelectProject={(id) => navigateTo('projects', id)}
-                  onToggleFullScreenForm={setIsFullScreenFormActive}
-                  onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
-                />
-              )}
-              {activeTab === 'projects' && selectedProjectId && (
-                <ProjectDetailPage
-                  projectId={selectedProjectId}
-                  onBack={() => navigateTo('projects', null)}
-                  onToggleFullScreenForm={setIsFullScreenFormActive}
-                />
-              )}
-              {activeTab === 'students' && selectedStudentId && (
-                <StudentProfilePage userId={selectedStudentId} onBack={() => navigateTo('users')} onSelectProject={(id) => navigateTo('projects', id)} />
-              )}
-              {activeTab === 'activities' && <WorkActivitiesPage />}
-              {activeTab === 'search' && <GlobalSearchPage initialQuery={navSearchQuery} />}
-              {activeTab === 'users' && user.role === 'ADMIN' && (
-                <UsersPage
-                  onSelectStudent={(id) => navigateTo('students', id)}
-                  onToggleFullScreenForm={setIsFullScreenFormActive}
-                />
-              )}
-              {activeTab === 'tasks' && (
-                <MyTasksPage onSelectProject={(id) => navigateTo('projects', id)} />
-              )}
-              {activeTab === 'account' && (
-                <MyAccountPage onOpenChangePassword={() => setIsChangePassOpen(true)} />
-              )}
-            </Suspense>
+            <ChunkErrorBoundary>
+              <Suspense fallback={<PageLoader />}>
+                {activeTab === 'dashboard' && <DashboardPage />}
+                {activeTab === 'projects' && !selectedProjectId && (
+                  <ProjectsPage
+                    onSelectProject={(id: string) => navigateTo('projects', id)}
+                    onToggleFullScreenForm={setIsFullScreenFormActive}
+                    onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
+                  />
+                )}
+                {activeTab === 'projects' && selectedProjectId && (
+                  <ProjectDetailPage
+                    projectId={selectedProjectId}
+                    onBack={() => navigateTo('projects', null)}
+                    onToggleFullScreenForm={setIsFullScreenFormActive}
+                  />
+                )}
+                {activeTab === 'students' && selectedStudentId && (
+                  <StudentProfilePage userId={selectedStudentId} onBack={() => navigateTo('users')} onSelectProject={(id: string) => navigateTo('projects', id)} />
+                )}
+                {activeTab === 'activities' && <WorkActivitiesPage />}
+                {activeTab === 'search' && <GlobalSearchPage initialQuery={navSearchQuery} />}
+                {activeTab === 'users' && user.role === 'ADMIN' && (
+                  <UsersPage
+                    onSelectStudent={(id: string) => navigateTo('students', id)}
+                    onToggleFullScreenForm={setIsFullScreenFormActive}
+                  />
+                )}
+                {activeTab === 'tasks' && (
+                  <MyTasksPage onSelectProject={(id: string) => navigateTo('projects', id)} />
+                )}
+                {activeTab === 'account' && (
+                  <MyAccountPage onOpenChangePassword={() => setIsChangePassOpen(true)} />
+                )}
+              </Suspense>
+            </ChunkErrorBoundary>
           </main>
         </div>
       </div>
