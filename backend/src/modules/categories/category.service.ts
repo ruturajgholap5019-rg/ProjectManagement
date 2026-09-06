@@ -27,8 +27,12 @@ export class CategoryService {
     return result;
   }
 
-  static async createCategory(data: { code: string; name: string; icon?: string; description?: string }) {
-    const code = data.code.trim().toUpperCase().replace(/\s+/g, '_');
+  static async createCategory(data: { code?: string; name: string; icon?: string; description?: string }) {
+    if (!data.name || !data.name.trim()) {
+      throw new AppError('Category name is required', 400);
+    }
+    const rawCode = data.code?.trim() || data.name.trim();
+    const code = rawCode.toUpperCase().replace(/[^A-Z0-9_]/g, '_').replace(/_+/g, '_');
     const existing = await ProjectCategory.findOne({
       $or: [{ code }, { name: data.name.trim() }],
     });
