@@ -81,7 +81,7 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s to handle Render free-tier cold starts
 
     try {
       let response = await fetch(`${BASE_URL}${endpoint}`, {

@@ -74,6 +74,24 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
+  if (!dashboardData) {
+    return (
+      <div style={{ padding: '60px 32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <AlertTriangle size={32} color="var(--warning, #f59e0b)" />
+          <span style={{ fontSize: '1rem', fontWeight: 600 }}>Could not load dashboard</span>
+          <span style={{ fontSize: '0.875rem' }}>The server may be waking up — please wait a moment and refresh.</span>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ marginTop: '8px', padding: '8px 20px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const { type, stats } = dashboardData;
 
   const navigateTo = (path: string) => {
