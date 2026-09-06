@@ -23,7 +23,7 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setAuth: (user: User, accessToken: string) => void;
+  setAuth: (user: User, accessToken: string, refreshToken?: string) => void;
   logout: () => Promise<void>;
   refreshSession: () => Promise<boolean>;
   fetchProfile: () => Promise<void>;
@@ -53,10 +53,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // If user is already in fast-cache, don't block the UI with full-screen loader!
   isLoading: hasLoggedIn && !initialUser,
 
-  setAuth: (user, accessToken) => {
+  setAuth: (user, accessToken, refreshToken) => {
     localStorage.setItem('has_logged_in', 'true');
     localStorage.setItem('auth_user', JSON.stringify(user));
     if (accessToken) localStorage.setItem('auth_token', accessToken);
+    if (refreshToken) localStorage.setItem('auth_refresh_token', refreshToken);
     set({ user, accessToken, isAuthenticated: true, isLoading: false });
   },
 
@@ -65,6 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.removeItem('has_logged_in');
     localStorage.removeItem('auth_user');
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_refresh_token');
     sessionStorage.clear();
 
     try {
@@ -83,14 +85,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const localRefreshToken = localStorage.getItem('auth_refresh_token');
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (localRefreshToken) {
+      headers['x-refresh-token'] = localRefreshToken;
+    }
 
     try {
       const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         credentials: 'include',
         signal: controller.signal,
+        body: localRefreshToken ? JSON.stringify({ refreshToken: localRefreshToken }) : undefined,
       });
 
       if (!res.ok) {
@@ -98,6 +107,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           localStorage.removeItem('has_logged_in');
           localStorage.removeItem('auth_user');
           localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_refresh_token');
           set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
         }
         return false;
@@ -107,8 +117,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (data.success && data.data?.accessToken) {
         const token = data.data.accessToken;
         const user = data.data.user || get().user;
+        const newRefreshToken = data.data.refreshToken;
 
         localStorage.setItem('auth_token', token);
+        if (newRefreshToken) {
+          localStorage.setItem('auth_refresh_token', newRefreshToken);
+        }
         if (user) {
           localStorage.setItem('auth_user', JSON.stringify(user));
         }

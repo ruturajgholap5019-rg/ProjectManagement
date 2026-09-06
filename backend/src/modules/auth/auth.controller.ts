@@ -10,11 +10,11 @@ export class AuthController {
       const { email, password } = req.body;
       const result = await AuthService.login(email, password);
 
-      // Set httpOnly cookie for refresh token
+      // Set httpOnly cookie for refresh token (sameSite: 'none' for cross-domain Vercel <-> Render)
       res.cookie('refreshToken', result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
 
@@ -23,6 +23,7 @@ export class AuthController {
         {
           user: result.user,
           accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
         },
         'Login successful'
       );
@@ -33,9 +34,13 @@ export class AuthController {
 
   static async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const token = req.cookies.refreshToken;
+      const token =
+        req.cookies?.refreshToken ||
+        req.body?.refreshToken ||
+        (req.headers['x-refresh-token'] as string);
+
       if (!token) {
-        throw new AppError('Refresh token cookie missing', 401);
+        throw new AppError('Refresh token missing', 401);
       }
 
       const result = await AuthService.refreshToken(token);
@@ -43,13 +48,13 @@ export class AuthController {
       res.cookie('refreshToken', result.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
       sendSuccess(
         res,
-        { accessToken: result.accessToken, user: result.user },
+        { accessToken: result.accessToken, refreshToken: result.refreshToken, user: result.user },
         'Token refreshed successfully'
       );
     } catch (error) {

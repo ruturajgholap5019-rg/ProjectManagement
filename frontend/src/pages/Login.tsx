@@ -28,13 +28,13 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const data = await apiFetch<{ user: any; accessToken: string }>('/auth/login', {
+      const data = await apiFetch<{ user: any; accessToken: string; refreshToken?: string }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
         requiresAuth: false,
       });
 
-      setAuth(data.user, data.accessToken);
+      setAuth(data.user, data.accessToken, data.refreshToken);
     } catch (err: any) {
       setError(err.message || 'Failed to sign in. Please check your credentials.');
     } finally {
