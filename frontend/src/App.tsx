@@ -514,6 +514,7 @@ export const App: React.FC = () => {
 
             <button
               onClick={() => navigateTo('account')}
+              onMouseEnter={() => prefetchEndpoint('/auth/me')}
               style={{
                 display: 'flex',
                 alignItems: 'center',

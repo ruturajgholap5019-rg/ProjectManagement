@@ -15,6 +15,9 @@ const app = express();
 // Enable Trust Proxy for Cloudflare & Reverse Proxies
 app.set('trust proxy', true);
 
+// Enable Strong ETags for HTTP 304 Cache Revalidation
+app.set('etag', 'strong');
+
 // Extract Real Client IP from Cloudflare CF-Connecting-IP Header
 app.use((req, _res, next) => {
   const cfIp = req.headers['cf-connecting-ip'];

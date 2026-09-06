@@ -52,11 +52,20 @@ export async function apiFetch<T>(endpoint: string, options: RequestOptions = {}
     invalidateApiCache();
   }
 
-  // 1. Instant Cache Hit for GET requests (0ms response time!)
+  // 1. Instant Cache Hit for GET requests (0ms response time with Stale-While-Revalidate!)
   if (method === 'GET' && !skipCache) {
     const cached = apiResponseCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < 30000) {
-      return cached.data as T;
+    if (cached) {
+      const age = Date.now() - cached.timestamp;
+      if (age < 15000) {
+        return cached.data as T; // Instant Fresh Hit
+      } else if (age < 60000) {
+        // Stale-While-Revalidate: Return cached data immediately, revalidate in background
+        if (!inFlightRequests.has(cacheKey)) {
+          apiFetch<T>(endpoint, { ...options, skipCache: true }).catch(() => {});
+        }
+        return cached.data as T;
+      }
     }
   }
 

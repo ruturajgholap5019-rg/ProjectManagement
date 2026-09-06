@@ -182,7 +182,8 @@ export class ProjectService {
   }
 
   static async listProjects(user: { id: string; role: UserRole }, filters: { status?: ProjectStatus; search?: string }) {
-    await ProjectService.checkExpiredProjectDeadlines();
+    // Non-blocking background check - never block user HTTP request
+    ProjectService.checkExpiredProjectDeadlines().catch(() => {});
     const query: any = {};
 
     if (user.role !== UserRole.ADMIN) {
@@ -248,7 +249,7 @@ export class ProjectService {
   }
 
   static async getProjectById(projectId: string) {
-    await ProjectService.checkExpiredProjectDeadlines();
+    ProjectService.checkExpiredProjectDeadlines().catch(() => {});
     const project = await Project.findById(projectId).lean();
 
     if (!project) {

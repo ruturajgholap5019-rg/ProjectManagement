@@ -27,7 +27,11 @@ export async function connectDB(): Promise<typeof mongoose> {
       logger.info(`🔌 Connecting to MongoDB (Attempt ${attempt}/${maxRetries})...`);
       const conn = await mongoose.connect(dbUrl, {
         autoIndex: env.NODE_ENV !== 'production', // Only auto-create indexes in dev/test
-        serverSelectionTimeoutMS: 15000,
+        serverSelectionTimeoutMS: 5000,
+        maxPoolSize: 50,                          // Connection pool for concurrent operations
+        minPoolSize: 10,                          // Maintain warm connections
+        socketTimeoutMS: 45000,                   // Socket timeout
+        maxIdleTimeMS: 30000,                     // Close idle connections after 30s
       });
 
       isConnected = true;

@@ -76,8 +76,10 @@ TaskSchema.virtual('id').get(function (this: any) {
 });
 
 TaskSchema.index({ projectId: 1, status: 1 });      // Task list by project+status (most common query)
+TaskSchema.index({ projectId: 1, milestoneId: 1, status: 1 }); // Milestone-specific task query
 TaskSchema.index({ assigneeId: 1, status: 1 });     // My tasks by assignee+status
 TaskSchema.index({ dueDate: 1, status: 1 });         // Overdue tasks filter
 TaskSchema.index({ parentTaskId: 1 });               // Subtask lookup
+TaskSchema.index({ createdById: 1, createdAt: -1 }); // Created tasks by date
 
 export const Task = mongoose.models.Task || mongoose.model<ITask>('Task', TaskSchema, 'tasks');
